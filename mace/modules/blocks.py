@@ -350,8 +350,9 @@ class InteractionBlock(torch.nn.Module):
             (n_total, node_feats.shape[1]),
             dtype=node_feats.dtype,
             device=node_feats.device,
-        )
-        node_feats = torch.cat((node_feats, pad), dim=0)
+        ) # ghost
+        node_feats = torch.cat((node_feats, pad), dim=0) # [local+ghost]
+        # 下面使用lammps发生消息传递，local的节点信息不变，但是ghost的变化（从赋值的0变到非0，也就是从别的gpu上传递过来了）！
         node_feats = LAMMPS_MP.apply(node_feats, lammps_class)
         return node_feats
 

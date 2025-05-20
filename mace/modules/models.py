@@ -378,7 +378,9 @@ class ScaleShiftMACE(MACE):
         cell = ctx.cell
         node_heads = ctx.node_heads
         interaction_kwargs = ctx.interaction_kwargs
-        lammps_natoms = interaction_kwargs.lammps_natoms
+        lammps_natoms = (
+            interaction_kwargs.lammps_natoms
+        )  # 分别为(n_real, n_ghost),加一起＝＝data["node_attrs"].shape[0]
         lammps_class = interaction_kwargs.lammps_class
 
         # Atomic energies
@@ -412,6 +414,8 @@ class ScaleShiftMACE(MACE):
         for i, (interaction, product, readout) in enumerate(
             zip(self.interactions, self.products, self.readouts)
         ):
+            # 第一层的node_feats：输入[local+ghost]，输出[local]; 所以，sc计算时的node_attr 是[local+ghost]，　自乘的使用node_attr 则必须是 [local]
+            # 第二层的node_feats：输入[local]，输出[local];所以，sc计算时的node_attr 是[local]，　自乘的使用node_attr 则必须是 [local]
             node_attrs_slice = data["node_attrs"]
             if is_lammps and i > 0:
                 node_attrs_slice = node_attrs_slice[: lammps_natoms[0]]
@@ -456,7 +460,7 @@ class ScaleShiftMACE(MACE):
             compute_hessian=compute_hessian,
             compute_edge_forces=compute_edge_forces or compute_atomic_stresses,
         )
-
+        # 使用mliap，则仅compute_edge_forces==True,其他都为False
         atomic_virials: Optional[torch.Tensor] = None
         atomic_stresses: Optional[torch.Tensor] = None
         if compute_atomic_stresses and edge_forces is not None:

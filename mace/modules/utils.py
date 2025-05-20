@@ -491,6 +491,7 @@ def compute_fixed_charge_dipole(
 
 
 class InteractionKwargs(NamedTuple):
+    # <mliap_unified_couple_kokkos.MLIAPDataPy object at 0x147c293571f0>
     lammps_class: Optional[torch.Tensor]
     lammps_natoms: Tuple[int, int] = (0, 0)
 
@@ -525,6 +526,10 @@ def prepare_graph(
     )
 
     if lammps_mliap:
+        # displacement　为空，　且vectors求导数而不是position，使用virial定义计算：向量与方向的叉乘，
+        # 不会存入 data["positions"] !!
+        # num_atoms_arange仅记录local原子的数目
+        # data["vectors"] 和　data["edge_index"]　都是偶数的batch维度，表明是双向图！
         n_real, n_total = data["natoms"][0], data["natoms"][1]
         num_graphs = 2
         num_atoms_arange = torch.arange(n_real, device=data["node_attrs"].device)
