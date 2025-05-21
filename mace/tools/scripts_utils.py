@@ -218,6 +218,81 @@ def print_git_commit():
         logging.debug(f"Error accessing Git repository: {e}")
         return "None"
 
+def extract_config_msmace_model(model: torch.nn.Module) -> Dict[str, Any]:
+    if model.__class__.__name__ != "ScaleShiftMSMACE":
+        return {"error": "Model is not a ScaleShiftMSMACE model"}
+
+    def radial_to_name(radial_type):
+        if radial_type == "BesselBasis":
+            return "bessel"
+        if radial_type == "GaussianBasis":
+            return "gaussian"
+        if radial_type == "ChebychevBasis":
+            return "chebyshev"
+        return radial_type
+
+    def radial_to_transform(radial):
+        if not hasattr(radial, "distance_transform"):
+            return None
+        if radial.distance_transform.__class__.__name__ == "AgnesiTransform":
+            return "Agnesi"
+        if radial.distance_transform.__class__.__name__ == "SoftTransform":
+            return "Soft"
+        return radial.distance_transform.__class__.__name__
+
+    scale = model.scale_shift.scale
+    shift = model.scale_shift.shift
+    heads = model.heads if hasattr(model, "heads") else ["default"]
+    model_mlp_irreps = (
+        o3.Irreps(str(model.readouts[-1].hidden_irreps))
+        if model.num_interactions.item() > 1
+        else 1
+    )
+    mlp_irreps = o3.Irreps(f"{model_mlp_irreps.count((0, 1)) // len(heads)}x0e")
+    try:
+        correlation = (
+            len(model.products[0].symmetric_contractions.contractions[0].weights) + 1
+        )
+    except AttributeError:
+        correlation = model.products[0].symmetric_contractions.contraction_degree
+    config = {
+        "r_max": model.r_max.item(),
+        "r_min": model.r_min,
+        "num_bessel": len(model.radial_embedding.bessel_fn.bessel_weights),
+        "num_polynomial_cutoff": model.radial_embedding.cutoff_fn.p.item(),
+        "max_ell": model.spherical_harmonics._lmax,  # pylint: disable=protected-access
+        "long_max_ell": model.long_spherical_harmonics._lmax,  # pylint: disable=protected-access
+        "interaction_cls": model.interactions[-1].__class__,
+        "interaction_cls_first": model.interactions[0].__class__,
+        "num_interactions": model.num_interactions.item(),
+        "num_elements": len(model.atomic_numbers),
+        "hidden_irreps": o3.Irreps(str(model.products[0].linear.irreps_out)),
+        "long_node_feats_irreps": model.long_node_feats_irreps,
+        "MLP_irreps": (mlp_irreps if model.num_interactions.item() > 1 else 1),
+        "gate": (
+            model.readouts[-1]  # pylint: disable=protected-access
+            .non_linearity._modules["acts"][0]
+            .f
+            if model.num_interactions.item() > 1
+            else None
+        ),
+        "atomic_energies": model.atomic_energies_fn.atomic_energies.cpu().numpy(),
+        "avg_num_neighbors": model.interactions[0].avg_num_neighbors,
+        "atomic_numbers": model.atomic_numbers,
+        "correlation": correlation,
+        "radial_type": radial_to_name(
+            model.radial_embedding.bessel_fn.__class__.__name__
+        ),
+        "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
+        "long_radial_MLP": model.interactions[0].long_conv_tp_weights.hs[1:-1],
+        "pair_repulsion": hasattr(model, "pair_repulsion_fn"),
+        "distance_transform": radial_to_transform(model.radial_embedding),
+        "atomic_inter_scale": scale.cpu().numpy(),
+        "atomic_inter_shift": shift.cpu().numpy(),
+        "heads": heads,
+    }
+    return config
+
 
 def extract_config_mace_model(model: torch.nn.Module) -> Dict[str, Any]:
     if model.__class__.__name__ != "ScaleShiftMACE":
