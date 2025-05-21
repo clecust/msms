@@ -20,9 +20,16 @@ def get_forces(path,label="forces", index=":"):
 
 if __name__ == "__main__":
 
-    path = "/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-mliap_lammps.pt_lmp_out.xyz"
-    path2 = "/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-mliap_lammps.pt_lmp.xyz"
+    # path = "/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-mliap_lammps.pt_lmp_out.xyz"
+    # path2 = "/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-mliap_lammps.pt_lmp.xyz"
 
+    ## msmace
+    # path = "/home/giga/code/msms/run/checkpoints/msmace_r4_debug_run-1.model-mliap_lammps.pt_lmp_out.xyz"
+    # path2 = "/home/giga/code/msms/run/checkpoints/msmace_r4_debug_run-1.model-mliap_lammps.pt_lmp.xyz"
+
+    ## msmacecso
+    path = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt_lmp_out.xyz"
+    path2 = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt_lmp.xyz"
     forces = get_forces(path, label="MACE_forces", index=":")
     forces2 = get_forces(path2, label="REF_forces", index=":")
 
@@ -33,7 +40,7 @@ if __name__ == "__main__":
             forces,
             forces2,
             "+",
-            label=f"rr2={np.corrcoef(forces.flatten(), forces2.flatten())[0, 1]:.2f}",
+            label=f"rr2={np.corrcoef(forces.flatten(), forces2.flatten())[0, 1]:.4f},mae={np.mean(np.abs(forces.flatten()-forces2.flatten())):.4f}",
         )
         plt.legend()
 
