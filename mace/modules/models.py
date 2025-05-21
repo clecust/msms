@@ -495,11 +495,11 @@ class ScaleShiftMSMACE(torch.nn.Module):
     def __init__(
         self,
         r_max: float,
-        r_min: float,
+        r_min: float,  # add
         num_bessel: int,
         num_polynomial_cutoff: int,
         max_ell: int,
-        long_max_ell: int,
+        long_max_ell: int,  # add
         interaction_cls: Type[InteractionBlock],
         interaction_cls_first: Type[InteractionBlock],
         num_interactions: int,
@@ -516,8 +516,8 @@ class ScaleShiftMSMACE(torch.nn.Module):
         pair_repulsion: bool = False,
         distance_transform: str = "None",
         radial_MLP: Optional[List[int]] = None,
-        long_node_feats_irreps: Optional[o3.Irreps] = None,
-        long_radial_MLP: Optional[List[int]] = None,
+        long_node_feats_irreps: Optional[o3.Irreps] = None,  # add
+        long_radial_MLP: Optional[List[int]] = None,  # add
         radial_type: Optional[str] = "bessel",
         heads: Optional[List[str]] = None,
         cueq_config: Optional[Dict[str, Any]] = None,
@@ -606,7 +606,7 @@ class ScaleShiftMSMACE(torch.nn.Module):
 
         # Use the appropriate self connection at the first layer for proper E0
         use_sc_first = False
-        if "Residual" in str(interaction_cls_first):
+        if "Residual" in str(RealAgnosticResidualInteractionBlockMS):
             use_sc_first = True
 
         node_feats_irreps_out = inter.target_irreps
