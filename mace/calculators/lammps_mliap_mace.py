@@ -172,6 +172,7 @@ class LAMMPS_MLIAP_MACE(MLIAPUnified):
             "node_attrs": torch.nn.functional.one_hot(
                 species.to(self.device), num_classes=self.num_species
             ).to(self.dtype),
+            # 输入是双向图的edge_index
             "edge_index": torch.stack(
                 [
                     torch.as_tensor(data.pair_j, dtype=torch.int64).to(self.device),
