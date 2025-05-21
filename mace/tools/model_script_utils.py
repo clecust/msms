@@ -158,7 +158,7 @@ def configure_model(
         model_config_foundation = None
 
     model = _build_model(args, model_config, model_config_foundation, heads)
-
+    logging.info(model)
     if model_foundation is not None:
         model = load_foundations_elements(
             model,
@@ -222,6 +222,26 @@ def _build_model(
             atomic_inter_scale=args.std,
             atomic_inter_shift=args.mean,
             radial_MLP=ast.literal_eval(args.radial_MLP),
+            radial_type=args.radial_type,
+            heads=heads,
+        )
+    # ScaleShiftMSMACE
+    if args.model == "ScaleShiftMSMACE":
+        return modules.ScaleShiftMSMACE(
+            **model_config,
+            pair_repulsion=args.pair_repulsion,
+            distance_transform=args.distance_transform,
+            correlation=args.correlation,
+            gate=modules.gate_dict[args.gate],
+            interaction_cls_first=modules.interaction_classes[args.interaction_first],
+            MLP_irreps=o3.Irreps(args.MLP_irreps),
+            atomic_inter_scale=args.std,
+            atomic_inter_shift=args.mean,
+            radial_MLP=ast.literal_eval(args.radial_MLP),
+            long_radial_MLP=ast.literal_eval(args.long_radial_MLP),
+            long_node_feats_irreps=o3.Irreps(args.long_node_feats_irreps),
+            long_max_ell=args.long_max_ell,
+            r_min=args.r_min,
             radial_type=args.radial_type,
             heads=heads,
         )

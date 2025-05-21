@@ -127,10 +127,18 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "ScaleShiftBOTNet",
             "AtomicDipolesMACE",
             "EnergyDipolesMACE",
+            "ScaleShiftMSMACE",
+            "ScaleShiftMSMACECSO",
         ],
     )
     parser.add_argument(
         "--r_max", help="distance cutoff (in Ang)", type=float, default=5.0
+    )
+    parser.add_argument(
+        "--r_min", help="distance cutoff (in Ang)", type=float, default=3.0
+    )
+    parser.add_argument(
+        "--r_mid", help="distance cutoff (in Ang)", type=float, default=5.0
     )
     parser.add_argument(
         "--radial_type",
@@ -174,6 +182,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "RealAgnosticInteractionBlock",
             "RealAgnosticDensityInteractionBlock",
             "RealAgnosticDensityResidualInteractionBlock",
+            "RealAgnosticResidualInteractionBlockMS",
         ],
     )
     parser.add_argument(
@@ -186,10 +195,14 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "RealAgnosticInteractionBlock",
             "RealAgnosticDensityInteractionBlock",
             "RealAgnosticDensityResidualInteractionBlock",
+            "RealAgnosticResidualInteractionBlockMS",
         ],
     )
     parser.add_argument(
         "--max_ell", help=r"highest \ell of spherical harmonics", type=int, default=3
+    )
+    parser.add_argument(
+        "--long_max_ell", help=r"highest \ell of long spherical harmonics", type=int, default=1
     )
     parser.add_argument(
         "--correlation", help="correlation order at each layer", type=int, default=3
@@ -210,7 +223,19 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default="[64, 64, 64]",
     )
     parser.add_argument(
+        "--long_radial_MLP",
+        help="width of the radial MLP",
+        type=str,
+        default="[64, 64, 64]",
+    )
+    parser.add_argument(
         "--hidden_irreps",
+        help="irreps for hidden node states",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        "--long_node_feats_irreps",
         help="irreps for hidden node states",
         type=str,
         default=None,
@@ -845,6 +870,12 @@ def build_preprocess_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--r_max", help="distance cutoff (in Ang)", type=float, default=5.0
+    )
+    parser.add_argument(
+        "--r_min", help="distance cutoff (in Ang)", type=float, default=3.0
+    )
+    parser.add_argument(
+        "--r_mid", help="distance cutoff (in Ang)", type=float, default=5.0
     )
     parser.add_argument(
         "--config_type_weights",
