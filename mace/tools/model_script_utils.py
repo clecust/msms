@@ -158,7 +158,6 @@ def configure_model(
         model_config_foundation = None
 
     model = _build_model(args, model_config, model_config_foundation, heads)
-    logging.info(model)
     if model_foundation is not None:
         model = load_foundations_elements(
             model,

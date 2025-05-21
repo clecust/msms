@@ -5,7 +5,11 @@ from typing import Dict, List, Tuple
 
 import torch
 
-from mace.tools.scripts_utils import extract_config_mace_model
+from mace.tools.scripts_utils import (
+    extract_config_mace_model,
+    extract_config_msmace_model,
+    extract_config_msmacecso_model,
+)
 
 
 def get_transfer_keys(num_layers: int) -> List[str]:
@@ -26,6 +30,36 @@ def get_transfer_keys(num_layers: int) -> List[str]:
             f"interactions.{j}.linear_up.weight",
             *[f"interactions.{j}.conv_tp_weights.layer{i}.weight" for i in range(4)],
             f"interactions.{j}.linear.weight",
+            f"interactions.{j}.skip_tp.weight",
+            f"products.{j}.linear.weight",
+        ]
+    ]
+
+
+def get_transfer_keys_msmace(num_layers: int) -> List[str]:
+    """Get list of keys that need to be transferred, for msmace"""
+    return [
+        "node_embedding.linear.weight",
+        "radial_embedding.bessel_fn.bessel_weights",
+        "long_radial_embedding.bessel_fn.bessel_weights",
+        "atomic_energies_fn.atomic_energies",
+        "readouts.0.linear.weight",
+        *[f"readouts.{j}.linear.weight" for j in range(num_layers - 1)],
+        "scale_shift.scale",
+        "scale_shift.shift",
+        *[f"readouts.{num_layers-1}.linear_{i}.weight" for i in range(1, 3)],
+    ] + [
+        s
+        for j in range(num_layers)
+        for s in [
+            f"interactions.{j}.linear_up.weight",
+            *[f"interactions.{j}.conv_tp_weights.layer{i}.weight" for i in range(4)],
+            f"interactions.{j}.linear.weight",
+            *[
+                f"interactions.{j}.long_conv_tp_weights.layer{i}.weight"
+                for i in range(4)
+            ],
+            f"interactions.{j}.long_linear.weight",
             f"interactions.{j}.skip_tp.weight",
             f"products.{j}.linear.weight",
         ]
@@ -91,6 +125,7 @@ def transfer_weights(
     max_L: int,
     correlation: int,
     num_layers: int,
+    model_info: str,
 ):
     """Transfer weights from CuEq to E3nn format"""
     # Get state dicts
@@ -98,7 +133,10 @@ def transfer_weights(
     target_dict = target_model.state_dict()
 
     # Transfer main weights
-    transfer_keys = get_transfer_keys(num_layers)
+    if model_info == "mace":
+        transfer_keys = get_transfer_keys(num_layers)
+    elif model_info == "msmace" or model_info == "msmacecso":
+        transfer_keys = get_transfer_keys_msmace(num_layers)
     for key in transfer_keys:
         if key in source_dict:  # Check if key exists
             target_dict[key] = source_dict[key]
@@ -153,8 +191,15 @@ def run(input_model, output_model="_e3nn.model", device="cpu", return_model=True
     default_dtype = next(source_model.parameters()).dtype
     torch.set_default_dtype(default_dtype)
     # Extract configuration
-    config = extract_config_mace_model(source_model)
-
+    if source_model.__class__.__name__ == "ScaleShiftMSMACE":
+        model_info = "msmace"
+        config = extract_config_msmace_model(source_model)
+    elif source_model.__class__.__name__ == "ScaleShiftMSMACECSO":
+        model_info = "msmacecso"
+        config = extract_config_msmacecso_model(source_model)
+    else:
+        model_info = "mace"
+        config = extract_config_mace_model(source_model)
     # Get max_L and correlation from config
     max_L = config["hidden_irreps"].lmax
     correlation = config["correlation"]
@@ -168,7 +213,9 @@ def run(input_model, output_model="_e3nn.model", device="cpu", return_model=True
 
     # Transfer weights with proper remapping
     num_layers = config["num_interactions"]
-    transfer_weights(source_model, target_model, max_L, correlation, num_layers)
+    transfer_weights(
+        source_model, target_model, max_L, correlation, num_layers, model_info
+    )
 
     if return_model:
         return target_model
