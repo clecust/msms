@@ -245,6 +245,35 @@ def _build_model(
             radial_type=args.radial_type,
             heads=heads,
         )
+    # ScaleShiftMSMACECSO
+    if args.model == "ScaleShiftMSMACECSO":
+        avg_num_neighbors = (
+            model_config["avg_num_neighbors"] * (args.r_mid / args.r_max) ** 3
+        ).__round__(1)
+        model_config["avg_num_neighbors"] = avg_num_neighbors
+        logging.info(
+            f"Using ScaleShiftMSMACECSO, updata avg_num_neighbors to {model_config['avg_num_neighbors']}"
+        )
+        return modules.ScaleShiftMSMACECSO(
+            **model_config,
+            pair_repulsion=args.pair_repulsion,
+            distance_transform=args.distance_transform,
+            correlation=args.correlation,
+            gate=modules.gate_dict[args.gate],
+            interaction_cls_first=modules.interaction_classes[args.interaction_first],
+            MLP_irreps=o3.Irreps(args.MLP_irreps),
+            atomic_inter_scale=args.std,
+            atomic_inter_shift=args.mean,
+            radial_MLP=ast.literal_eval(args.radial_MLP),
+            long_radial_MLP=ast.literal_eval(args.long_radial_MLP),
+            long_node_feats_irreps=o3.Irreps(args.long_node_feats_irreps),
+            long_max_ell=args.long_max_ell,
+            r_min=args.r_min,
+            r_mid=args.r_mid ,
+            xc=args.xc,
+            radial_type=args.radial_type,
+            heads=heads,
+        )
     if args.model == "FoundationMACE":
         return modules.ScaleShiftMACE(**model_config_foundation)
     if args.model == "ScaleShiftBOTNet":

@@ -9,6 +9,7 @@ from mace.modules.wrapper_ops import CuEquivarianceConfig
 from mace.tools.scripts_utils import (
     extract_config_mace_model,
     extract_config_msmace_model,
+    extract_config_msmacecso_model,
 )
 
 
@@ -116,7 +117,7 @@ def transfer_weights(
     # Transfer main weights
     if model_info == 'mace':
         transfer_keys = get_transfer_keys(num_layers)
-    elif model_info == "msmace":
+    elif model_info == "msmace" or model_info == "msmacecso":
         transfer_keys = get_transfer_keys_msmace(num_layers)
     for key in transfer_keys:
         if key in source_dict:  # Check if key exists
@@ -180,12 +181,16 @@ def run(
     default_dtype = next(source_model.parameters()).dtype
     torch.set_default_dtype(default_dtype)
     # Extract configuration
-    config = extract_config_mace_model(source_model)
-    model_info = 'mace'
-    if 'error' in config:
+
+    if source_model.__class__.__name__ == "ScaleShiftMSMACE":
         model_info = "msmace"
         config = extract_config_msmace_model(source_model)
-
+    elif source_model.__class__.__name__ == "ScaleShiftMSMACECSO":
+        model_info = "msmacecso"
+        config = extract_config_msmacecso_model(source_model)
+    else:
+        model_info = 'mace'
+        config = extract_config_mace_model(source_model)
     # Get max_L and correlation from config
     max_L = config["hidden_irreps"].lmax
     correlation = config["correlation"]

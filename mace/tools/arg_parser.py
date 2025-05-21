@@ -140,6 +140,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--r_mid", help="distance cutoff (in Ang)", type=float, default=5.0
     )
+    parser.add_argument("--xc", help="dispersion_correction", type=str, default="pbe")
     parser.add_argument(
         "--radial_type",
         help="type of radial basis functions",
