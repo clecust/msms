@@ -5,7 +5,11 @@ from .dftd3 import (
     D3Calculator_node_train,
     D3Calculator_forces,
 )
-from .dft_d3cso import D3CSO_Calculator, D3CSO_Calculator_f
+from .dft_d3cso import (
+    D3CSO_Calculator,
+    D3CSO_Calculator_f,
+    D3CSO_Calculator_edge_forces,
+)
 
 
 __all__ = [
@@ -19,4 +23,5 @@ __all__ = [
     "D3Calculator_forces",
     "D3CSO_Calculator",
     "D3CSO_Calculator_f",
+    "D3CSO_Calculator_edge_forces",
 ]

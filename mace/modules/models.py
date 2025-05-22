@@ -473,6 +473,24 @@ class ScaleShiftMACE(MACE):
                 batch=data["batch"],
                 cell=cell,
             )
+        # print(f"virials={virials}")
+        # print(f"stress={stress}")
+        # if atomic_virials is not None:
+        #     print(f"atomic_virials={atomic_virials.shape}")
+        # else:
+        #     print(f"atomic_virials={atomic_virials}")
+        # if atomic_stresses is not None:
+        #     print(f"atomic_stresses={atomic_stresses.shape}")
+        # else:
+        #     print(f"atomic_stresses={atomic_stresses}")
+        # if forces is not None:
+        #     print(f"forces={forces.shape}")
+        # else:
+        #     print(f"forces={forces}")
+        # if edge_forces is not None:
+        #     print(f"edge_forces={edge_forces.shape}")
+        # else:
+        #     print(f"edge_forces={edge_forces}")
         return {
             "energy": total_energy,
             "node_energy": node_energy,
@@ -840,8 +858,8 @@ class ScaleShiftMSMACE(torch.nn.Module):
 from mace.modules import dftd
 
 @compile_mode("script")
-class ScaleShiftMSMACECSO(torch.nn.Module):
-
+class ScaleShiftMSMACECSO_bak(torch.nn.Module):
+    # libtorch-mace-lammps的接口没有问题；　但是基于向量求导的mliap-lammps接口出现问题！！
     def __init__(
         self,
         r_max: float,
@@ -1184,6 +1202,380 @@ class ScaleShiftMSMACECSO(torch.nn.Module):
             compute_edge_forces=compute_edge_forces or compute_atomic_stresses,
         )
         # 使用mliap，则仅compute_edge_forces==True,其他都为False
+        atomic_virials: Optional[torch.Tensor] = None
+        atomic_stresses: Optional[torch.Tensor] = None
+        if compute_atomic_stresses and edge_forces is not None:
+            atomic_virials, atomic_stresses = get_atomic_virials_stresses(
+                edge_forces=edge_forces,
+                edge_index=data["edge_index"],
+                vectors=vectors,
+                num_atoms=positions.shape[0],
+                batch=data["batch"],
+                cell=cell,
+            )
+        return {
+            "energy": total_energy,
+            "node_energy": node_energy,
+            "interaction_energy": inter_e,
+            "forces": forces,
+            "edge_forces": edge_forces,
+            "virials": virials,
+            "stress": stress,
+            "atomic_virials": atomic_virials,
+            "atomic_stresses": atomic_stresses,
+            "hessian": hessian,
+            "displacement": displacement,
+            "node_feats": node_feats_out,
+        }
+
+
+@compile_mode("script")
+class ScaleShiftMSMACECSO(torch.nn.Module):
+    # libtorch-mace-lammps的接口没有问题；　但是基于向量求导的mliap-lammps接口出现问题！！
+    # 采用解析解的方式，太复杂，而且难以平衡mace-lammps和mliap-lammps的接口，另外还有Pytroch训练的接口
+    # libtorch-mace: 采用自动微分的方法；　而mliap-lammps采用解析解（edge_forces为负梯度）,且返回的色散能量是没有vec和length的梯度关联的(两个都要取消！！有一个都不行)；　实现两个接口以及pytroch的统一
+    def __init__(
+        self,
+        r_max: float,
+        r_mid: float,  # add
+        r_min: float,  # add
+        num_bessel: int,
+        num_polynomial_cutoff: int,
+        max_ell: int,
+        long_max_ell: int,  # add
+        interaction_cls: Type[InteractionBlock],
+        interaction_cls_first: Type[InteractionBlock],
+        num_interactions: int,
+        num_elements: int,
+        hidden_irreps: o3.Irreps,
+        MLP_irreps: o3.Irreps,
+        atomic_energies: np.ndarray,
+        avg_num_neighbors: float,
+        atomic_numbers: List[int],
+        correlation: Union[int, List[int]],
+        gate: Optional[Callable],
+        atomic_inter_scale: float,
+        atomic_inter_shift: float,
+        pair_repulsion: bool = False,
+        distance_transform: str = "None",
+        radial_MLP: Optional[List[int]] = None,
+        long_node_feats_irreps: Optional[o3.Irreps] = None,  # add
+        long_radial_MLP: Optional[List[int]] = None,  # add
+        radial_type: Optional[str] = "bessel",
+        heads: Optional[List[str]] = None,
+        cueq_config: Optional[Dict[str, Any]] = None,
+        lammps_mliap: Optional[bool] = False,
+        xc="pbe",
+    ):
+        super().__init__()
+        self.register_buffer(
+            "atomic_numbers", torch.tensor(atomic_numbers, dtype=torch.int64)
+        )
+        self.r_min = r_min
+        self.r_mid = r_mid
+        self.xc = xc
+        self.register_buffer(
+            "r_max", torch.tensor(r_max, dtype=torch.get_default_dtype())
+        )
+        self.register_buffer(
+            "num_interactions", torch.tensor(num_interactions, dtype=torch.int64)
+        )
+        self.dispersion_correction = dftd.D3CSO_Calculator_edge_forces(
+            xc=xc,
+            cutoff=r_max,
+            bidirectional=True,
+        )
+        if heads is None:
+            heads = ["Default"]
+        self.heads = heads
+        if isinstance(correlation, int):
+            correlation = [correlation] * num_interactions
+        self.lammps_mliap = lammps_mliap
+        # Embedding
+        node_attr_irreps = o3.Irreps([(num_elements, (0, 1))])
+        node_feats_irreps = o3.Irreps([(hidden_irreps.count(o3.Irrep(0, 1)), (0, 1))])
+        self.node_embedding = LinearNodeEmbeddingBlock(
+            irreps_in=node_attr_irreps,
+            irreps_out=node_feats_irreps,
+            cueq_config=cueq_config,
+        )
+        self.radial_embedding = RadialEmbeddingBlock(
+            r_max=r_min,
+            num_bessel=num_bessel,
+            num_polynomial_cutoff=num_polynomial_cutoff,
+            radial_type=radial_type,
+            distance_transform=distance_transform,
+        )
+        edge_feats_irreps = o3.Irreps(f"{self.radial_embedding.out_dim}x0e")
+        if pair_repulsion:
+            self.pair_repulsion_fn = ZBLBasis(p=num_polynomial_cutoff)
+            self.pair_repulsion = True
+
+        sh_irreps = o3.Irreps.spherical_harmonics(max_ell)
+        num_features = hidden_irreps.count(o3.Irrep(0, 1))
+        interaction_irreps = (sh_irreps * num_features).sort()[0].simplify()
+        self.spherical_harmonics = o3.SphericalHarmonics(
+            sh_irreps, normalize=True, normalization="component"
+        )
+        ## long
+        self.long_radial_embedding = RadialEmbeddingBlock(
+            r_max=r_mid,
+            num_bessel=num_bessel,
+            num_polynomial_cutoff=num_polynomial_cutoff,
+            radial_type=radial_type,
+            distance_transform=distance_transform,
+        )
+        long_edge_feats_irreps = o3.Irreps(f"{self.long_radial_embedding.out_dim}x0e")
+        long_sh_irreps = o3.Irreps.spherical_harmonics(long_max_ell)
+        self.long_spherical_harmonics = o3.SphericalHarmonics(
+            long_sh_irreps, normalize=True, normalization="component"
+        )
+        self.long_node_feats_irreps = long_node_feats_irreps
+        if radial_MLP is None:
+            radial_MLP = [64, 64, 64]
+        if long_radial_MLP is None:
+            long_radial_MLP = [64, 64, 64]
+        # Interactions and readout
+        self.atomic_energies_fn = AtomicEnergiesBlock(atomic_energies)
+
+        inter = RealAgnosticResidualInteractionBlockMS(
+            node_attrs_irreps=node_attr_irreps,
+            node_feats_irreps=node_feats_irreps,
+            edge_attrs_irreps=sh_irreps,
+            edge_feats_irreps=edge_feats_irreps,
+            target_irreps=interaction_irreps,
+            hidden_irreps=hidden_irreps,
+            avg_num_neighbors=avg_num_neighbors,
+            radial_MLP=radial_MLP,
+            long_radial_MLP=long_radial_MLP,
+            long_node_feats_irreps=self.long_node_feats_irreps,
+            long_edge_feats_irreps=long_edge_feats_irreps,
+            long_edge_attrs_irreps=long_sh_irreps,
+            cueq_config=cueq_config,
+        )
+        self.interactions = torch.nn.ModuleList([inter])
+
+        # Use the appropriate self connection at the first layer for proper E0
+        use_sc_first = False
+        if "Residual" in str(RealAgnosticResidualInteractionBlockMS):
+            use_sc_first = True
+
+        node_feats_irreps_out = inter.target_irreps
+        prod = EquivariantProductBasisBlock(
+            node_feats_irreps=node_feats_irreps_out,
+            target_irreps=hidden_irreps,
+            correlation=correlation[0],
+            num_elements=num_elements,
+            use_sc=use_sc_first,
+            cueq_config=cueq_config,
+        )
+        self.products = torch.nn.ModuleList([prod])
+
+        self.readouts = torch.nn.ModuleList()
+        self.readouts.append(
+            LinearReadoutBlock(
+                hidden_irreps, o3.Irreps(f"{len(heads)}x0e"), cueq_config
+            )
+        )
+
+        for i in range(num_interactions - 1):
+            if i == num_interactions - 2:
+                hidden_irreps_out = str(
+                    hidden_irreps[0]
+                )  # Select only scalars for last layer
+            else:
+                hidden_irreps_out = hidden_irreps
+            inter = RealAgnosticResidualInteractionBlockMS(
+                node_attrs_irreps=node_attr_irreps,
+                node_feats_irreps=hidden_irreps,
+                edge_attrs_irreps=sh_irreps,
+                edge_feats_irreps=edge_feats_irreps,
+                target_irreps=interaction_irreps,
+                hidden_irreps=hidden_irreps_out,
+                avg_num_neighbors=avg_num_neighbors,
+                radial_MLP=radial_MLP,
+                long_radial_MLP=long_radial_MLP,
+                long_node_feats_irreps=self.long_node_feats_irreps,
+                long_edge_feats_irreps=long_edge_feats_irreps,
+                long_edge_attrs_irreps=long_sh_irreps,
+                cueq_config=cueq_config,
+            )
+            self.interactions.append(inter)
+            prod = EquivariantProductBasisBlock(
+                node_feats_irreps=interaction_irreps,
+                target_irreps=hidden_irreps_out,
+                correlation=correlation[i + 1],
+                num_elements=num_elements,
+                use_sc=True,
+                cueq_config=cueq_config,
+            )
+            self.products.append(prod)
+            if i == num_interactions - 2:
+                self.readouts.append(
+                    NonLinearReadoutBlock(
+                        hidden_irreps_out,
+                        (len(heads) * MLP_irreps).simplify(),
+                        gate,
+                        o3.Irreps(f"{len(heads)}x0e"),
+                        len(heads),
+                        cueq_config,
+                    )
+                )
+            else:
+                self.readouts.append(
+                    LinearReadoutBlock(
+                        hidden_irreps, o3.Irreps(f"{len(heads)}x0e"), cueq_config
+                    )
+                )
+
+        self.scale_shift = ScaleShiftBlock(
+            scale=atomic_inter_scale, shift=atomic_inter_shift
+        )
+
+    def forward(
+        self,
+        data: Dict[str, torch.Tensor],
+        training: bool = False,
+        compute_force: bool = True,
+        compute_virials: bool = False,
+        compute_stress: bool = False,
+        compute_displacement: bool = False,
+        compute_hessian: bool = False,
+        compute_edge_forces: bool = False,
+        compute_atomic_stresses: bool = False,
+        lammps_mliap: bool = False,
+    ) -> Dict[str, Optional[torch.Tensor]]:
+        # Setup
+        ctx = prepare_graph(
+            data,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+            compute_displacement=compute_displacement,
+            lammps_mliap=lammps_mliap,
+        )
+
+        is_lammps = ctx.is_lammps
+        num_atoms_arange = ctx.num_atoms_arange
+        num_graphs = ctx.num_graphs
+        displacement = ctx.displacement
+        positions = ctx.positions
+        vectors = ctx.vectors
+        lengths = ctx.lengths
+        cell = ctx.cell
+        node_heads = ctx.node_heads
+        interaction_kwargs = ctx.interaction_kwargs
+        lammps_natoms = (
+            interaction_kwargs.lammps_natoms
+        )  # 分别为(n_real, n_ghost),加一起＝＝data["node_attrs"].shape[0]
+        lammps_class = interaction_kwargs.lammps_class
+
+        # Atomic energies
+        node_e0 = self.atomic_energies_fn(data["node_attrs"])[
+            num_atoms_arange, node_heads
+        ]
+        e0 = scatter_sum(
+            src=node_e0, index=data["batch"], dim=0, dim_size=num_graphs
+        )  # [n_graphs, num_heads]
+
+        # Embeddings
+        node_feats = self.node_embedding(data["node_attrs"])
+        # r_mid
+        rmid_mask = lengths.squeeze(1) < self.r_mid
+        long_edge_index = data["edge_index"][:, rmid_mask]
+        long_edge_attrs = self.long_spherical_harmonics(vectors[rmid_mask])
+        long_edge_feats = self.long_radial_embedding(
+            lengths[rmid_mask],
+            data["node_attrs"],
+            long_edge_index,
+            self.atomic_numbers,
+        )
+        # r_min
+        rmin_mask = lengths.squeeze(1) < self.r_min
+        edge_index = data["edge_index"][:, rmin_mask]
+        edge_attrs = self.spherical_harmonics(vectors[rmin_mask])
+        edge_feats = self.radial_embedding(
+            lengths[rmin_mask],
+            data["node_attrs"],
+            edge_index,
+            self.atomic_numbers,
+        )
+
+        if hasattr(self, "pair_repulsion"):
+            pair_node_energy = self.pair_repulsion_fn(
+                lengths, data["node_attrs"], data["edge_index"], self.atomic_numbers
+            )
+            if is_lammps:
+                pair_node_energy = pair_node_energy[: lammps_natoms[0]]
+        else:
+            pair_node_energy = torch.zeros_like(node_e0)
+
+        # Interactions
+        node_es_list = [pair_node_energy]
+        node_feats_list: List[torch.Tensor] = []
+
+        for i, (interaction, product, readout) in enumerate(
+            zip(self.interactions, self.products, self.readouts)
+        ):
+            # 第一层的node_feats：输入[local+ghost]，输出[local]; 所以，sc计算时的node_attr 是[local+ghost]，　自乘的使用node_attr 则必须是 [local]
+            # 第二层的node_feats：输入[local]，输出[local];所以，sc计算时的node_attr 是[local]，　自乘的使用node_attr 则必须是 [local]
+            node_attrs_slice = data["node_attrs"]
+            if is_lammps and i > 0:
+                node_attrs_slice = node_attrs_slice[: lammps_natoms[0]]
+            node_feats, sc = interaction(
+                node_attrs=node_attrs_slice,
+                node_feats=node_feats,
+                edge_attrs=edge_attrs,
+                edge_feats=edge_feats,
+                edge_index=edge_index,
+                long_edge_attrs=long_edge_attrs,
+                long_edge_feats=long_edge_feats,
+                long_edge_index=long_edge_index,
+                first_layer=(i == 0),
+                lammps_class=lammps_class,
+                lammps_natoms=lammps_natoms,
+            )
+            if is_lammps and i == 0:
+                node_attrs_slice = node_attrs_slice[: lammps_natoms[0]]
+            node_feats = product(
+                node_feats=node_feats, sc=sc, node_attrs=node_attrs_slice
+            )
+            node_feats_list.append(node_feats)
+            node_es_list.append(
+                readout(node_feats, node_heads)[num_atoms_arange, node_heads]
+            )
+
+        node_feats_out = torch.cat(node_feats_list, dim=-1)
+        node_inter_es = torch.sum(torch.stack(node_es_list, dim=0), dim=0)
+        ######  dispersion_correction
+        node_disp, edge_disp_f = self.dispersion_correction(
+            vectors.detach() if is_lammps else vectors,  #
+            lengths.detach() if is_lammps else lengths,
+            data["edge_index"],
+            self.atomic_numbers[torch.argmax(data["node_attrs"], dim=1)],
+        )
+        if is_lammps:
+            node_disp = node_disp[: lammps_natoms[0]]
+        node_inter_es = self.scale_shift(node_inter_es, node_heads) + node_disp  # add
+        inter_e = scatter_sum(node_inter_es, data["batch"], dim=-1, dim_size=num_graphs)
+        total_energy = e0 + inter_e
+        node_energy = node_e0.clone().double() + node_inter_es.clone().double()
+
+        forces, virials, stress, hessian, edge_forces = get_outputs(
+            energy=inter_e,
+            positions=positions,
+            displacement=displacement,
+            vectors=vectors,
+            cell=cell,
+            training=training,
+            compute_force=compute_force,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+            compute_hessian=compute_hessian,
+            compute_edge_forces=compute_edge_forces or compute_atomic_stresses,
+        )
+        if edge_forces is not None:
+            ### jiust in mliap # Match LAMMPS sign convention
+            edge_forces -= edge_disp_f
         atomic_virials: Optional[torch.Tensor] = None
         atomic_stresses: Optional[torch.Tensor] = None
         if compute_atomic_stresses and edge_forces is not None:

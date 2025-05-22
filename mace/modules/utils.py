@@ -266,6 +266,7 @@ def get_edge_vectors_and_lengths(
     sender = edge_index[0]
     receiver = edge_index[1]
     vectors = positions[receiver] - positions[sender] + shifts  # [n_edges, 3]
+    # vectors = vectors.requires_grad_(True) # debug
     lengths = torch.linalg.norm(vectors, dim=-1, keepdim=True)  # [n_edges, 1]
     if normalize:
         vectors_normed = vectors / (lengths + eps)
