@@ -17,6 +17,8 @@ from .blocks import (
     RealAgnosticDensityResidualInteractionBlock,
     RealAgnosticInteractionBlock,
     RealAgnosticResidualInteractionBlock,
+    RealAgnosticResidualInteractionBlockMSR,
+    RealAgnosticResidualInteractionBlockMS,
     ScaleShiftBlock,
 )
 from .loss import (
@@ -37,6 +39,7 @@ from .models import (
     ScaleShiftMACE,
     ScaleShiftMSMACE,
     ScaleShiftMSMACECSO,
+    ScaleShiftMSMACECSOR,
 )
 from .radial import BesselBasis, GaussianBasis, PolynomialCutoff, ZBLBasis
 from .symmetric_contraction import SymmetricContraction
@@ -55,6 +58,8 @@ interaction_classes: Dict[str, Type[InteractionBlock]] = {
     "RealAgnosticInteractionBlock": RealAgnosticInteractionBlock,
     "RealAgnosticDensityInteractionBlock": RealAgnosticDensityInteractionBlock,
     "RealAgnosticDensityResidualInteractionBlock": RealAgnosticDensityResidualInteractionBlock,
+    "RealAgnosticResidualInteractionBlockMSR": RealAgnosticResidualInteractionBlockMSR,
+    "RealAgnosticResidualInteractionBlockMS": RealAgnosticResidualInteractionBlockMS,
 }
 
 scaling_classes: Dict[str, Callable] = {

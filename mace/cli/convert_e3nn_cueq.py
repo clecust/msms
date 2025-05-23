@@ -185,7 +185,10 @@ def run(
     if source_model.__class__.__name__ == "ScaleShiftMSMACE":
         model_info = "msmace"
         config = extract_config_msmace_model(source_model)
-    elif source_model.__class__.__name__ == "ScaleShiftMSMACECSO":
+    elif (
+        source_model.__class__.__name__ == "ScaleShiftMSMACECSO"
+        or source_model.__class__.__name__ == "ScaleShiftMSMACECSOR"
+    ):
         model_info = "msmacecso"
         config = extract_config_msmacecso_model(source_model)
     else:

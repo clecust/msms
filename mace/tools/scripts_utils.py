@@ -220,8 +220,8 @@ def print_git_commit():
 
 
 def extract_config_msmacecso_model(model: torch.nn.Module) -> Dict[str, Any]:
-    if model.__class__.__name__ != "ScaleShiftMSMACECSO":
-        return {"error": "Model is not a ScaleShiftMSMACECSO model"}
+    # if model.__class__.__name__ != "ScaleShiftMSMACECSO":
+    #     return {"error": "Model is not a ScaleShiftMSMACECSO model"}
 
     def radial_to_name(radial_type):
         if radial_type == "BesselBasis":
@@ -260,7 +260,7 @@ def extract_config_msmacecso_model(model: torch.nn.Module) -> Dict[str, Any]:
         "r_max": model.r_max.item(),
         "r_min": model.r_min,
         "r_mid": model.r_mid,
-        "xc":model.xc,
+        "xc": model.xc,
         "num_bessel": len(model.radial_embedding.bessel_fn.bessel_weights),
         "num_polynomial_cutoff": model.radial_embedding.cutoff_fn.p.item(),
         "max_ell": model.spherical_harmonics._lmax,  # pylint: disable=protected-access

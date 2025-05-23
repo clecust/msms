@@ -664,7 +664,7 @@ def run(args) -> None:
     # Cueq
     if args.enable_cueq:
         logging.info("Converting model to CUEQ for accelerated training")
-        assert model.__class__.__name__ in ["MACE", "ScaleShiftMACE","ScaleShiftMSMACE","ScaleShiftMSMACECSO"]
+        assert model.__class__.__name__ in ["MACE", "ScaleShiftMACE","ScaleShiftMSMACE","ScaleShiftMSMACECSO","ScaleShiftMSMACECSOR"]
         model = run_e3nn_to_cueq(deepcopy(model), device=device)
     logging.info(model)
     # Optimizer

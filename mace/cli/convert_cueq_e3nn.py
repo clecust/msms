@@ -135,7 +135,9 @@ def transfer_weights(
     # Transfer main weights
     if model_info == "mace":
         transfer_keys = get_transfer_keys(num_layers)
-    elif model_info == "msmace" or model_info == "msmacecso":
+    elif (
+        model_info == "msmace" or model_info == "msmacecso"
+    ):
         transfer_keys = get_transfer_keys_msmace(num_layers)
     for key in transfer_keys:
         if key in source_dict:  # Check if key exists
@@ -194,7 +196,10 @@ def run(input_model, output_model="_e3nn.model", device="cpu", return_model=True
     if source_model.__class__.__name__ == "ScaleShiftMSMACE":
         model_info = "msmace"
         config = extract_config_msmace_model(source_model)
-    elif source_model.__class__.__name__ == "ScaleShiftMSMACECSO":
+    elif (
+        source_model.__class__.__name__ == "ScaleShiftMSMACECSO"
+        or source_model.__class__.__name__ == "ScaleShiftMSMACECSOR"
+    ):
         model_info = "msmacecso"
         config = extract_config_msmacecso_model(source_model)
     else:
