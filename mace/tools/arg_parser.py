@@ -147,7 +147,14 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         help="type of radial basis functions",
         type=str,
         default="bessel",
-        choices=["bessel", "gaussian", "chebyshev"],
+        choices=["bessel", "gaussian", "chebyshev", "radial"],
+    )
+    parser.add_argument(
+        "--long_radial_type",
+        help="type of radial basis functions for long",
+        type=str,
+        default="bessel",
+        choices=["bessel", "gaussian", "chebyshev", "radial"],
     )
     parser.add_argument(
         "--num_radial_basis",

@@ -28,6 +28,7 @@ from .radial import (
     AgnesiTransform,
     BesselBasis,
     ChebychevBasis,
+    RadialBasis,
     GaussianBasis,
     PolynomialCutoff,
     SoftTransform,
@@ -219,12 +220,17 @@ class RadialEmbeddingBlock(torch.nn.Module):
             self.bessel_fn = GaussianBasis(r_max=r_max, num_basis=num_bessel)
         elif radial_type == "chebyshev":
             self.bessel_fn = ChebychevBasis(r_max=r_max, num_basis=num_bessel)
+        elif radial_type == "radial":
+            self.bessel_fn = RadialBasis(r_max=r_max, num_basis=num_bessel)
         if distance_transform == "Agnesi":
             self.distance_transform = AgnesiTransform()
         elif distance_transform == "Soft":
             self.distance_transform = SoftTransform()
         self.cutoff_fn = PolynomialCutoff(r_max=r_max, p=num_polynomial_cutoff)
-        self.out_dim = num_bessel
+        if radial_type == "radial":
+            self.out_dim = 1
+        else:
+            self.out_dim = num_bessel
 
     def forward(
         self,
@@ -966,6 +972,8 @@ class RealAgnosticResidualInteractionBlockMSR(torch.nn.Module):
             scatter_sum(src=mji, index=sender, dim=0, dim_size=num_nodes)
             * self.prefix_reverse
         )
+        # message_reverse = torch.zeros_like(message)
+
         ### long
         long_sender = long_edge_index[0]
         long_receiver = long_edge_index[1]
@@ -982,6 +990,7 @@ class RealAgnosticResidualInteractionBlockMSR(torch.nn.Module):
             scatter_sum(src=long_mji, index=long_sender, dim=0, dim_size=num_nodes)
             * self.long_prefix_reverse
         )
+        # long_message_reverse = torch.zeros_like(long_message)
         long_message = self.long_linear(long_message + long_message_reverse)
         message = message + message_reverse + long_message
         #

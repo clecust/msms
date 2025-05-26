@@ -230,6 +230,8 @@ def extract_config_msmacecso_model(model: torch.nn.Module) -> Dict[str, Any]:
             return "gaussian"
         if radial_type == "ChebychevBasis":
             return "chebyshev"
+        if radial_type == "RadialBasis":
+            return "radial"
         return radial_type
 
     def radial_to_transform(radial):
@@ -308,6 +310,8 @@ def extract_config_msmace_model(model: torch.nn.Module) -> Dict[str, Any]:
             return "gaussian"
         if radial_type == "ChebychevBasis":
             return "chebyshev"
+        if radial_type == "RadialBasis":
+            return "radial"
         return radial_type
 
     def radial_to_transform(radial):
@@ -384,6 +388,8 @@ def extract_config_mace_model(model: torch.nn.Module) -> Dict[str, Any]:
             return "gaussian"
         if radial_type == "ChebychevBasis":
             return "chebyshev"
+        if radial_type == "RadialBasis":
+            return "radial"
         return radial_type
 
     def radial_to_transform(radial):

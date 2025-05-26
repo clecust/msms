@@ -15,6 +15,22 @@ from mace.tools.scatter import scatter_sum
 
 
 @compile_mode("script")
+class RadialBasis(torch.nn.Module):
+    def __init__(self, r_max: float, num_basis=8, trainable=False):
+        super().__init__()
+        self.register_buffer("bessel_weights", torch.tensor([1.0]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return 1.0/(x+1e-4)
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(num_basis={len(self.bessel_weights)}, "
+            f"trainable={self.bessel_weights.requires_grad})"
+        )
+
+
+@compile_mode("script")
 class BesselBasis(torch.nn.Module):
     """
     Equation (7)
@@ -97,15 +113,15 @@ class GaussianBasis(torch.nn.Module):
             start=0.0, end=r_max, steps=num_basis, dtype=torch.get_default_dtype()
         )
         if trainable:
-            self.gaussian_weights = torch.nn.Parameter(
+            self.bessel_weights = torch.nn.Parameter(
                 gaussian_weights, requires_grad=True
             )
         else:
-            self.register_buffer("gaussian_weights", gaussian_weights)
+            self.register_buffer("bessel_weights", gaussian_weights)
         self.coeff = -0.5 / (r_max / (num_basis - 1)) ** 2
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # [..., 1]
-        x = x - self.gaussian_weights
+        x = x - self.bessel_weights
         return torch.exp(self.coeff * torch.pow(x, 2))
 
 

@@ -473,25 +473,7 @@ class ScaleShiftMACE(MACE):
                 num_atoms=positions.shape[0],
                 batch=data["batch"],
                 cell=cell,
-            )
-        # print(f"virials={virials}")
-        # print(f"stress={stress}")
-        # if atomic_virials is not None:
-        #     print(f"atomic_virials={atomic_virials.shape}")
-        # else:
-        #     print(f"atomic_virials={atomic_virials}")
-        # if atomic_stresses is not None:
-        #     print(f"atomic_stresses={atomic_stresses.shape}")
-        # else:
-        #     print(f"atomic_stresses={atomic_stresses}")
-        # if forces is not None:
-        #     print(f"forces={forces.shape}")
-        # else:
-        #     print(f"forces={forces}")
-        # if edge_forces is not None:
-        #     print(f"edge_forces={edge_forces.shape}")
-        # else:
-        #     print(f"edge_forces={edge_forces}")
+            )        
         return {
             "energy": total_energy,
             "node_energy": node_energy,
@@ -1637,6 +1619,7 @@ class ScaleShiftMSMACECSOR(torch.nn.Module):
         long_node_feats_irreps: Optional[o3.Irreps] = None,  # add
         long_radial_MLP: Optional[List[int]] = None,  # add
         radial_type: Optional[str] = "bessel",
+        long_radial_type: Optional[str] = "bessel",
         heads: Optional[List[str]] = None,
         cueq_config: Optional[Dict[str, Any]] = None,
         lammps_mliap: Optional[bool] = False,
@@ -1697,7 +1680,7 @@ class ScaleShiftMSMACECSOR(torch.nn.Module):
             r_max=r_mid,
             num_bessel=num_bessel,
             num_polynomial_cutoff=num_polynomial_cutoff,
-            radial_type=radial_type,
+            radial_type=long_radial_type,
             distance_transform=distance_transform,
         )
         long_edge_feats_irreps = o3.Irreps(f"{self.long_radial_embedding.out_dim}x0e")
@@ -1855,7 +1838,9 @@ class ScaleShiftMSMACECSOR(torch.nn.Module):
         # Embeddings
         node_feats = self.node_embedding(data["node_attrs"])
         ### R
+        # vectors.requires_grad_(True)
         mask_index = data["edge_index"][0] < data["edge_index"][1]
+        # mask_index = torch.ones_like(mask_index).bool() # debug
         edge_index_r = data["edge_index"][:, mask_index]
         vectors_r = vectors[mask_index]
         lengths_r = lengths[mask_index]
@@ -1929,7 +1914,7 @@ class ScaleShiftMSMACECSOR(torch.nn.Module):
         node_inter_es = torch.sum(torch.stack(node_es_list, dim=0), dim=0)
         ######  dispersion_correction
         node_disp, edge_disp_f = self.dispersion_correction(
-            vectors.detach() if is_lammps else vectors,  #
+            vectors.detach() if is_lammps else vectors,
             lengths.detach() if is_lammps else lengths,
             data["edge_index"],
             self.atomic_numbers[torch.argmax(data["node_attrs"], dim=1)],
