@@ -73,6 +73,13 @@ def select_head(model):
     return heads[-1]
 
 
+def has_dftd_submodule(model, submodule_name="dftd"):
+    for name, _ in model.named_modules():
+        if name.endswith("." + submodule_name) or name == submodule_name:
+            return True
+    return False
+
+
 def main():
     args = parse_args()
     model_path = args.model_path  # takes model name as command-line input
@@ -80,6 +87,11 @@ def main():
         model_path,
         map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     )
+    if has_dftd_submodule(model, "dispersion_correction"):
+        try:
+            print(f"model.dispersion_correction.prefix={model.dispersion_correction.prefix}")
+        except:
+            print("has dispersion_correction, but no prefix")
     if args.dtype == "float64":
         model = model.double().to("cpu")
     elif args.dtype == "float32":
