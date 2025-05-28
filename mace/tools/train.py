@@ -51,6 +51,7 @@ def valid_err_log(
     log_errors,
     epoch=None,
     valid_loader_name="Default",
+    lr=None,
 ):
     eval_metrics["mode"] = "eval"
     eval_metrics["epoch"] = epoch
@@ -64,7 +65,7 @@ def valid_err_log(
         error_e = eval_metrics["rmse_e_per_atom"] * 1e3
         error_f = eval_metrics["rmse_f"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A"
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A,lr={lr}"
         )
     elif (
         log_errors == "PerAtomRMSEstressvirials"
@@ -74,7 +75,7 @@ def valid_err_log(
         error_f = eval_metrics["rmse_f"] * 1e3
         error_stress = eval_metrics["rmse_stress"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_stress={error_stress:8.2f} meV / A^3",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_stress={error_stress:8.2f} meV / A^3,lr={lr}",
         )
     elif (
         log_errors == "PerAtomRMSEstressvirials"
@@ -84,7 +85,7 @@ def valid_err_log(
         error_f = eval_metrics["rmse_f"] * 1e3
         error_virials = eval_metrics["rmse_virials_per_atom"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_virials_per_atom={error_virials:8.2f} meV",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_virials_per_atom={error_virials:8.2f} meV,lr={lr}",
         )
     elif (
         log_errors == "PerAtomMAEstressvirials"
@@ -94,7 +95,7 @@ def valid_err_log(
         error_f = eval_metrics["mae_f"] * 1e3
         error_stress = eval_metrics["mae_stress"] * 1e3
         logging.info(
-            f"{inintial_phrase}: loss={valid_loss:8.8f}, MAE_E_per_atom={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A, MAE_stress={error_stress:8.2f} meV / A^3"
+            f"{inintial_phrase}: loss={valid_loss:8.8f}, MAE_E_per_atom={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A, MAE_stress={error_stress:8.2f} meV / A^3,lr={lr}"
         )
     elif (
         log_errors == "PerAtomMAEstressvirials"
@@ -104,38 +105,76 @@ def valid_err_log(
         error_f = eval_metrics["mae_f"] * 1e3
         error_virials = eval_metrics["mae_virials"] * 1e3
         logging.info(
-            f"{inintial_phrase}: loss={valid_loss:8.8f}, MAE_E_per_atom={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A, MAE_virials={error_virials:8.2f} meV"
+            f"{inintial_phrase}: loss={valid_loss:8.8f}, MAE_E_per_atom={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A, MAE_virials={error_virials:8.2f} meV,lr={lr}"
         )
     elif log_errors == "TotalRMSE":
         error_e = eval_metrics["rmse_e"] * 1e3
         error_f = eval_metrics["rmse_f"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A,lr={lr}",
         )
     elif log_errors == "PerAtomMAE":
         error_e = eval_metrics["mae_e_per_atom"] * 1e3
         error_f = eval_metrics["mae_f"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, MAE_E_per_atom={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, MAE_E_per_atom={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A,lr={lr}",
         )
     elif log_errors == "TotalMAE":
         error_e = eval_metrics["mae_e"] * 1e3
         error_f = eval_metrics["mae_f"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, MAE_E={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, MAE_E={error_e:8.2f} meV, MAE_F={error_f:8.2f} meV / A,lr={lr}",
         )
     elif log_errors == "DipoleRMSE":
         error_mu = eval_metrics["rmse_mu_per_atom"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_MU_per_atom={error_mu:8.2f} mDebye",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_MU_per_atom={error_mu:8.2f} mDebye,lr={lr}",
         )
     elif log_errors == "EnergyDipoleRMSE":
         error_e = eval_metrics["rmse_e_per_atom"] * 1e3
         error_f = eval_metrics["rmse_f"] * 1e3
         error_mu = eval_metrics["rmse_mu_per_atom"] * 1e3
         logging.info(
-            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_Mu_per_atom={error_mu:8.2f} mDebye",
+            f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_Mu_per_atom={error_mu:8.2f} mDebye,lr={lr}",
         )
+
+"""
+new_batch_size = 32
+train_loader2 = change_batch_size(train_loader, new_batch_size)
+"""
+# import copy
+def change_batch_size(train_loader, new_batch_size):
+    # 提取原始 DataLoader 的关键属性
+    dataset = train_loader.dataset
+    sampler = train_loader.sampler
+    drop_last = train_loader.drop_last
+    num_workers = train_loader.num_workers
+    pin_memory = train_loader.pin_memory
+    timeout = train_loader.timeout
+    worker_init_fn = train_loader.worker_init_fn
+    multiprocessing_context = train_loader.multiprocessing_context
+    generator = train_loader.generator
+
+    # 如果原始 DataLoader 使用了 batch_sampler，我们需要重新创建普通的采样器
+    if isinstance(sampler, torch.utils.data.RandomSampler):
+        # 尝试从 batch_sampler 推断 shuffle 和 drop_last
+        shuffle = True
+    else:
+        assert False, "only sigle gpu"
+
+    # 创建新的 DataLoader
+    new_loader = torch_geometric.dataloader.DataLoader(
+        dataset=dataset,
+        batch_size=new_batch_size,
+        sampler=None,
+        shuffle=shuffle,
+        drop_last=True,
+        pin_memory=pin_memory,
+        num_workers=num_workers,
+        generator=generator,
+    )
+    logging.info(f"new batch_size for train data  = {new_batch_size}")
+    return new_loader
 
 
 def train(
@@ -209,6 +248,8 @@ def train(
                 lowest_loss = np.inf
                 swa_start = False
                 keep_last = True
+                # train_loader = change_batch_size(train_loader, 5)
+
             loss_fn = swa.loss_fn
             swa.model.update_parameters(model)
             if epoch > start_epoch:
@@ -265,6 +306,7 @@ def train(
                             log_errors,
                             epoch,
                             valid_loader_name,
+                            lr=f"{optimizer.state_dict()['param_groups'][0]['lr']:.2e}",
                         )
                         if log_wandb:
                             wandb_log_dict[valid_loader_name] = {
