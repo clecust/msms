@@ -240,6 +240,7 @@ def _build_model(
             long_radial_MLP=ast.literal_eval(args.long_radial_MLP),
             long_node_feats_irreps=o3.Irreps(args.long_node_feats_irreps),
             long_max_ell=args.long_max_ell,
+            long_radial_type=args.long_radial_type,
             r_min=args.r_min,
             radial_type=args.radial_type,
             heads=heads,
@@ -268,9 +269,10 @@ def _build_model(
             long_node_feats_irreps=o3.Irreps(args.long_node_feats_irreps),
             long_max_ell=args.long_max_ell,
             r_min=args.r_min,
-            r_mid=args.r_mid ,
+            r_mid=args.r_mid,
             xc=args.xc,
             radial_type=args.radial_type,
+            long_radial_type=args.long_radial_type,
             heads=heads,
         )
     if args.model == "ScaleShiftMSMACECSOR":
