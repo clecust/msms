@@ -78,7 +78,9 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         self.register_buffer("a2", torch.tensor([a2], dtype=torch.get_default_dtype()))
         self.register_buffer("a4", torch.tensor([a4], dtype=torch.get_default_dtype()))
         self.register_buffer("s6", torch.tensor([s6], dtype=torch.get_default_dtype()))
-
+        self.prefix = torch.nn.Parameter(
+            torch.tensor([0.0], dtype=torch.get_default_dtype())
+        )
     def forward(
         self,
         dij: torch.Tensor,  # vec
@@ -103,7 +105,7 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         r0ij = 0.5 * (r0[row] + r0[col])
         node_num = Z.shape[0]
 
-        a1 = self.a1
+        a1 = self.a1 * (torch.tanh(self.prefix)+1.0)
 
         # D3-CSO dispersion correction
         edisp = (

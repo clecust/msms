@@ -217,6 +217,12 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         "--correlation", help="correlation order at each layer", type=int, default=3
     )
     parser.add_argument(
+        "--d3_train",
+        help=r"d3_train",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--num_interactions", help="number of interactions", type=int, default=2
     )
     parser.add_argument(

@@ -1245,6 +1245,7 @@ class ScaleShiftMSMACECSO(torch.nn.Module):
         radial_MLP: Optional[List[int]] = None,
         long_node_feats_irreps: Optional[o3.Irreps] = None,  # add
         long_radial_MLP: Optional[List[int]] = None,  # add
+        long_radial_type: Optional[str] = "bessel",
         radial_type: Optional[str] = "bessel",
         heads: Optional[List[str]] = None,
         cueq_config: Optional[Dict[str, Any]] = None,
@@ -1306,7 +1307,7 @@ class ScaleShiftMSMACECSO(torch.nn.Module):
             r_max=r_mid,
             num_bessel=num_bessel,
             num_polynomial_cutoff=num_polynomial_cutoff,
-            radial_type=radial_type,
+            radial_type=long_radial_type,
             distance_transform=distance_transform,
         )
         long_edge_feats_irreps = o3.Irreps(f"{self.long_radial_embedding.out_dim}x0e")

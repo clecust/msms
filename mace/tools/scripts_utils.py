@@ -288,6 +288,9 @@ def extract_config_msmacecso_model(model: torch.nn.Module) -> Dict[str, Any]:
         "radial_type": radial_to_name(
             model.radial_embedding.bessel_fn.__class__.__name__
         ),
+        "long_radial_type": radial_to_name(
+            model.long_radial_embedding.bessel_fn.__class__.__name__
+        ),
         "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
         "long_radial_MLP": model.interactions[0].long_conv_tp_weights.hs[1:-1],
         "pair_repulsion": hasattr(model, "pair_repulsion_fn"),
@@ -365,6 +368,9 @@ def extract_config_msmace_model(model: torch.nn.Module) -> Dict[str, Any]:
         "correlation": correlation,
         "radial_type": radial_to_name(
             model.radial_embedding.bessel_fn.__class__.__name__
+        ),
+        "long_radial_type": radial_to_name(
+            model.long_radial_embedding.bessel_fn.__class__.__name__
         ),
         "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
         "long_radial_MLP": model.interactions[0].long_conv_tp_weights.hs[1:-1],
@@ -847,6 +853,11 @@ def get_swa(
     )
     return swa, swas
 
+def has_dftd_submodule(model,submodule_name='dftd'):
+    for name, _ in model.named_modules():
+        if name.endswith('.' + submodule_name) or name == submodule_name:
+            return True
+    return False
 
 def get_params_options(
     args: argparse.Namespace, model: torch.nn.Module
@@ -858,7 +869,11 @@ def get_params_options(
             decay_interactions[name] = param
         else:
             no_decay_interactions[name] = param
-
+    if  args.d3_train and  has_dftd_submodule(model, "dispersion_correction"):
+        for name, param in model.dispersion_correction.named_parameters():
+            if name == "prefix":
+                logging.info(f"model.dispersion_correction.prefix will be trained")
+                no_decay_interactions[name]  = param
     param_options = dict(
         params=[
             {
