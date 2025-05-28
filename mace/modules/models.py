@@ -520,6 +520,7 @@ class ScaleShiftMSMACE(torch.nn.Module):
         long_node_feats_irreps: Optional[o3.Irreps] = None,  # add
         long_radial_MLP: Optional[List[int]] = None,  # add
         radial_type: Optional[str] = "bessel",
+        long_radial_type: Optional[str] = "bessel",
         heads: Optional[List[str]] = None,
         cueq_config: Optional[Dict[str, Any]] = None,
         lammps_mliap: Optional[bool] = False,
@@ -572,7 +573,7 @@ class ScaleShiftMSMACE(torch.nn.Module):
             r_max=r_max,
             num_bessel=num_bessel,
             num_polynomial_cutoff=num_polynomial_cutoff,
-            radial_type=radial_type,
+            radial_type=long_radial_type,
             distance_transform=distance_transform,
         )
         long_edge_feats_irreps = o3.Irreps(f"{self.long_radial_embedding.out_dim}x0e")
@@ -1590,7 +1591,7 @@ class ScaleShiftMSMACECSOR(torch.nn.Module):
     # libtorch-mace-lammps的接口没有问题；　但是基于向量求导的mliap-lammps接口出现问题！！
     # 采用解析解的方式，太复杂，而且难以平衡mace-lammps和mliap-lammps的接口，另外还有Pytroch训练的接口
     # libtorch-mace: 采用自动微分的方法；　而mliap-lammps采用解析解（edge_forces为负梯度）,且返回的色散能量是没有vec和length的梯度关联的(两个都要取消！！有一个都不行)；　实现两个接口以及pytroch的统一
-    # 加上反射的设计
+    # 加上反射的设计 ' 但是在mliap中，<出现明显错误，>直接跑崩
     def __init__(
         self,
         r_max: float,
