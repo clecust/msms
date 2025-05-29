@@ -701,6 +701,7 @@ def run(args) -> None:
                 state=tools.CheckpointState(model, optimizer, lr_scheduler),
                 swa=True,
                 device=device,
+                finetune=args.finetune,
             )
         except Exception:  # pylint: disable=W0703
             try:
@@ -708,6 +709,7 @@ def run(args) -> None:
                     state=tools.CheckpointState(model, optimizer, lr_scheduler),
                     swa=False,
                     device=device,
+                    finetune=args.finetune,
                 )
             except Exception: # pylint: disable=W0703
                 restart_lbfgs = True
@@ -732,6 +734,7 @@ def run(args) -> None:
                 state=tools.CheckpointState(model, optimizer, lr_scheduler),
                 swa=False,
                 device=device,
+                finetune=args.finetune,
             )
             if opt_start_epoch is not None:
                 start_epoch = opt_start_epoch
@@ -802,6 +805,9 @@ def run(args) -> None:
         plotter=plotter,
         train_sampler=train_sampler,
         rank=rank,
+        rigid_probability_epoch=args.rigid_probability_epoch,
+        rigid_probability_batch=args.rigid_probability_batch,
+        rigid_probability=args.rigid_probability
     )
 
     logging.info("")
@@ -883,6 +889,7 @@ def run(args) -> None:
             state=tools.CheckpointState(model, optimizer, lr_scheduler),
             swa=swa_eval,
             device=device,
+            finetune=args.finetune
         )
         model.to(device)
         if args.distributed:

@@ -138,16 +138,17 @@ def valid_err_log(
             f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_Mu_per_atom={error_mu:8.2f} mDebye,lr={lr}",
         )
 
-"""
-new_batch_size = 32
-train_loader2 = change_batch_size(train_loader, new_batch_size)
-"""
-# import copy
-def change_batch_size(train_loader, new_batch_size):
+def change_batch_size_with_probability(train_loader, new_batch_size, p:float=0.8,text='data'):
+    """
+    修改数据加载器的批次大小，并使用概率采样器
+
+    参数:
+        train_loader: 原始数据加载器
+        new_batch_size: 新的批次大小
+        p: 从weight>1类别采样的概率
+    """
     # 提取原始 DataLoader 的关键属性
     dataset = train_loader.dataset
-    sampler = train_loader.sampler
-    drop_last = train_loader.drop_last
     num_workers = train_loader.num_workers
     pin_memory = train_loader.pin_memory
     timeout = train_loader.timeout
@@ -155,25 +156,42 @@ def change_batch_size(train_loader, new_batch_size):
     multiprocessing_context = train_loader.multiprocessing_context
     generator = train_loader.generator
 
-    # 如果原始 DataLoader 使用了 batch_sampler，我们需要重新创建普通的采样器
-    if isinstance(sampler, torch.utils.data.RandomSampler):
-        # 尝试从 batch_sampler 推断 shuffle 和 drop_last
-        shuffle = True
+    # 分离两种标签的数据索引
+    p = max(0.0, min(1.0, p))
+    if not isinstance(dataset,List):
+        dataset_list = dataset.datasets[0]
     else:
-        assert False, "only sigle gpu"
+        dataset_list = dataset
+    data_weight = np.array(
+        [w.weight for w in dataset_list ]
+    )
+    data_weight_mask = data_weight == 1.0
+    weights = torch.zeros(len(dataset_list))
+    weights[data_weight_mask] = (1-p) / (data_weight_mask.sum())
+    weights[~data_weight_mask] = p / ((~data_weight_mask).sum())
+
+    # 创建概率采样器
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=weights,
+        num_samples=len(dataset_list),
+        replacement=True,
+    )
 
     # 创建新的 DataLoader
     new_loader = torch_geometric.dataloader.DataLoader(
         dataset=dataset,
         batch_size=new_batch_size,
-        sampler=None,
-        shuffle=shuffle,
+        sampler=sampler,
+        shuffle=False,  # 采样器已处理打乱
         drop_last=True,
         pin_memory=pin_memory,
         num_workers=num_workers,
         generator=generator,
     )
-    logging.info(f"new batch_size for train data  = {new_batch_size}")
+
+    logging.info(
+        f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size for train data = {new_batch_size}"
+    )
     return new_loader
 
 
@@ -203,6 +221,9 @@ def train(
     distributed_model: Optional[DistributedDataParallel] = None,
     train_sampler: Optional[DistributedSampler] = None,
     rank: Optional[int] = 0,
+    rigid_probability_epoch=100000,
+    rigid_probability_batch=5,
+    rigid_probability=0.8,
 ):
     lowest_loss = np.inf
     valid_loss = np.inf
@@ -248,12 +269,25 @@ def train(
                 lowest_loss = np.inf
                 swa_start = False
                 keep_last = True
-                # train_loader = change_batch_size(train_loader, 5)
 
             loss_fn = swa.loss_fn
             swa.model.update_parameters(model)
             if epoch > start_epoch:
                 swa.scheduler.step()
+        if epoch == rigid_probability_epoch:
+            train_loader = change_batch_size_with_probability(
+                train_loader,
+                rigid_probability_batch,
+                p=rigid_probability,
+                text="train_loader",
+            )
+            for valid_loader_name in valid_loaders:
+                valid_loaders[valid_loader_name] = change_batch_size_with_probability(
+                    valid_loaders[valid_loader_name],
+                    rigid_probability_batch*2,
+                    p=rigid_probability,
+                    text="valid_loader",
+                )
 
         # Train
         if distributed:
@@ -448,6 +482,7 @@ def take_step(
             compute_virials=output_args["virials"],
             compute_stress=output_args["stress"],
         )
+        # print(batch.weight.mean()) # 验证，p选择的概念是否正确；验证通过；
         loss = loss_fn(pred=output, ref=batch)
         loss.backward()
         if max_grad_norm is not None:
@@ -588,6 +623,7 @@ def evaluate(
             compute_virials=output_args["virials"],
             compute_stress=output_args["stress"],
         )
+        # print(batch.weight.mean())
         avg_loss, aux = metrics(batch, output)
 
     avg_loss, aux = metrics.compute()

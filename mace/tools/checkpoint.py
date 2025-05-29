@@ -35,11 +35,12 @@ class CheckpointBuilder:
 
     @staticmethod
     def load_checkpoint(
-        state: CheckpointState, checkpoint: Checkpoint, strict: bool
+        state: CheckpointState, checkpoint: Checkpoint, strict: bool, finetune:bool=False,
     ) -> None:
         state.model.load_state_dict(checkpoint["model"], strict=strict)  # type: ignore
-        state.optimizer.load_state_dict(checkpoint["optimizer"])
-        state.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+        if not finetune:
+            state.optimizer.load_state_dict(checkpoint["optimizer"])
+            state.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
 
 @dataclasses.dataclass
@@ -206,13 +207,16 @@ class CheckpointHandler:
         swa: Optional[bool] = False,
         device: Optional[torch.device] = None,
         strict=False,
+        finetune=False,
     ) -> Optional[int]:
         result = self.io.load_latest(swa=swa, device=device)
         if result is None:
             return None
 
         checkpoint, epochs = result
-        self.builder.load_checkpoint(state=state, checkpoint=checkpoint, strict=strict)
+        self.builder.load_checkpoint(
+            state=state, checkpoint=checkpoint, strict=strict, finetune=finetune
+        )
         return epochs
 
     def load(

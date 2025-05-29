@@ -169,6 +169,24 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default=5,
     )
     parser.add_argument(
+        "--rigid_probability_epoch",
+        help="rigid_probability_epoch",
+        type=int,
+        default=1000000,
+    )
+    parser.add_argument(
+        "--rigid_probability_batch",
+        help="rigid_probability_batch",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--rigid_probability",
+        help="rigid_probability",
+        type=float,
+        default=0.8,
+    )
+    parser.add_argument(
         "--pair_repulsion",
         help="use pair repulsion term with ZBL potential",
         action="store_true",
@@ -219,6 +237,12 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--d3_train",
         help=r"d3_train",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--finetune",
+        help=r"restart model params, but no lr and optizimer",
         action="store_true",
         default=False,
     )
