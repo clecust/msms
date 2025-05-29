@@ -184,7 +184,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         "--rigid_probability",
         help="rigid_probability",
         type=float,
-        default=0.8,
+        default=0.0,
     )
     parser.add_argument(
         "--pair_repulsion",

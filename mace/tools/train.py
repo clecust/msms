@@ -190,7 +190,7 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p:float=0.8
     )
 
     logging.info(
-        f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size for train data = {new_batch_size}"
+        f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size = {new_batch_size}"
     )
     return new_loader
 
@@ -223,7 +223,7 @@ def train(
     rank: Optional[int] = 0,
     rigid_probability_epoch=100000,
     rigid_probability_batch=5,
-    rigid_probability=0.8,
+    rigid_probability=0.0,
 ):
     lowest_loss = np.inf
     valid_loss = np.inf
@@ -370,6 +370,14 @@ def train(
                                 f"Stopping optimization after {patience_counter} epochs without improvement and starting Stage Two"
                             )
                             epoch = swa.start
+                        elif (
+                            rigid_probability > 0.0
+                            and epoch < rigid_probability_epoch
+                        ):
+                            logging.info(
+                                f"Stopping optimization after {patience_counter} epochs without improvement and starting rigid_probability"
+                            )
+                            epoch = rigid_probability_epoch
                         else:
                             logging.info(
                                 f"Stopping optimization after {patience_counter} epochs without improvement"
