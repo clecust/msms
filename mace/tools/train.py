@@ -138,7 +138,7 @@ def valid_err_log(
             f"{inintial_phrase}: head: {valid_loader_name}, loss={valid_loss:8.8f}, RMSE_E_per_atom={error_e:8.2f} meV, RMSE_F={error_f:8.2f} meV / A, RMSE_Mu_per_atom={error_mu:8.2f} mDebye,lr={lr}",
         )
 
-def change_batch_size_with_probability(train_loader, new_batch_size, p:float=0.8,text='data'):
+def change_batch_size_with_probability(train_loader, new_batch_size, p=None,text='data'):
     """
     修改数据加载器的批次大小，并使用概率采样器
 
@@ -157,26 +157,32 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p:float=0.8
     generator = train_loader.generator
 
     # 分离两种标签的数据索引
-    p = max(0.0, min(1.0, p))
-    if not isinstance(dataset,List):
-        dataset_list = dataset.datasets[0]
+    if p is not None:
+        p = max(0.0, min(1.0, p))
+        if not isinstance(dataset,List):
+            dataset_list = dataset.datasets[0]
+        else:
+            dataset_list = dataset
+        data_weight = np.array(
+            [w.weight for w in dataset_list ]
+        )
+        data_weight_mask = data_weight == 1.0
+        weights = torch.zeros(len(dataset_list))
+        weights[data_weight_mask] = (1-p) / (data_weight_mask.sum())
+        weights[~data_weight_mask] = p / ((~data_weight_mask).sum())
+
+        # 创建概率采样器
+        sampler = torch.utils.data.WeightedRandomSampler(
+            weights=weights,
+            num_samples=len(dataset_list),
+            replacement=True,
+        )
+        logging.info(
+        f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size = {new_batch_size}"
+    )
     else:
-        dataset_list = dataset
-    data_weight = np.array(
-        [w.weight for w in dataset_list ]
-    )
-    data_weight_mask = data_weight == 1.0
-    weights = torch.zeros(len(dataset_list))
-    weights[data_weight_mask] = (1-p) / (data_weight_mask.sum())
-    weights[~data_weight_mask] = p / ((~data_weight_mask).sum())
-
-    # 创建概率采样器
-    sampler = torch.utils.data.WeightedRandomSampler(
-        weights=weights,
-        num_samples=len(dataset_list),
-        replacement=True,
-    )
-
+        sampler = None
+        logging.info(f"{text}: New batch_size = {new_batch_size}")
     # 创建新的 DataLoader
     new_loader = torch_geometric.dataloader.DataLoader(
         dataset=dataset,
@@ -189,9 +195,7 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p:float=0.8
         generator=generator,
     )
 
-    logging.info(
-        f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size = {new_batch_size}"
-    )
+
     return new_loader
 
 
@@ -223,7 +227,7 @@ def train(
     rank: Optional[int] = 0,
     rigid_probability_epoch=100000,
     rigid_probability_batch=5,
-    rigid_probability=0.0,
+    rigid_probability=None,
 ):
     lowest_loss = np.inf
     valid_loss = np.inf
@@ -275,6 +279,7 @@ def train(
             if epoch > start_epoch:
                 swa.scheduler.step()
         if epoch == rigid_probability_epoch:
+            lowest_loss = np.inf
             train_loader = change_batch_size_with_probability(
                 train_loader,
                 rigid_probability_batch,
@@ -371,8 +376,7 @@ def train(
                             )
                             epoch = swa.start
                         elif (
-                            rigid_probability > 0.0
-                            and epoch < rigid_probability_epoch
+                            epoch < rigid_probability_epoch
                         ):
                             logging.info(
                                 f"Stopping optimization after {patience_counter} epochs without improvement and starting rigid_probability"
