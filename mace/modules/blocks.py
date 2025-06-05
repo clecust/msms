@@ -600,7 +600,12 @@ class RealAgnosticResidualInteractionBlockMS(torch.nn.Module):
         self.edge_feats_irreps = edge_feats_irreps
         self.target_irreps = target_irreps
         self.hidden_irreps = hidden_irreps
-        self.avg_num_neighbors = avg_num_neighbors
+        # self.avg_num_neighbors = avg_num_neighbors
+        self.register_buffer(
+            "avg_num_neighbors",
+            torch.tensor([avg_num_neighbors], dtype=torch.get_default_dtype()),
+        )
+
         if radial_MLP is None:
             radial_MLP = [64, 64, 64]
         self.radial_MLP = radial_MLP
@@ -968,11 +973,14 @@ class RealAgnosticResidualInteractionBlockMSR(torch.nn.Module):
         message = scatter_sum(
             src=mji, index=receiver, dim=0, dim_size=num_nodes
         )  # [n_nodes, irreps]
+        # print(mji.shape)
+        # print(receiver.shape,receiver.max())
+        # print(sender.shape,sender.max())
         message_reverse = (
             scatter_sum(src=mji, index=sender, dim=0, dim_size=num_nodes)
             * self.prefix_reverse
         )
-        # message_reverse = torch.zeros_like(message)
+        message_reverse = torch.zeros_like(message)
 
         ### long
         long_sender = long_edge_index[0]
@@ -986,11 +994,11 @@ class RealAgnosticResidualInteractionBlockMSR(torch.nn.Module):
         long_message = scatter_sum(
             src=long_mji, index=long_receiver, dim=0, dim_size=num_nodes
         )  # [n_nodes, irreps]
-        long_message_reverse = (
-            scatter_sum(src=long_mji, index=long_sender, dim=0, dim_size=num_nodes)
-            * self.long_prefix_reverse
-        )
-        # long_message_reverse = torch.zeros_like(long_message)
+        # long_message_reverse = (
+        #     scatter_sum(src=long_mji, index=long_sender, dim=0, dim_size=num_nodes)
+        #     * self.long_prefix_reverse
+        # )
+        long_message_reverse = torch.zeros_like(long_message)
         long_message = self.long_linear(long_message + long_message_reverse)
         message = message + message_reverse + long_message
         #
