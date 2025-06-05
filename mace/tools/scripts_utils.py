@@ -869,11 +869,11 @@ def get_params_options(
             decay_interactions[name] = param
         else:
             no_decay_interactions[name] = param
-    if  args.d3_train and  has_dftd_submodule(model, "dispersion_correction"):
-        for name, param in model.dispersion_correction.named_parameters():
-            if name == "prefix":
-                logging.info(f"model.dispersion_correction.prefix will be trained")
-                no_decay_interactions[name]  = param
+    # if  args.d3_train and  has_dftd_submodule(model, "dispersion_correction"):
+    #     for name, param in model.dispersion_correction.named_parameters():
+    #         if name == "prefix":
+    #             logging.info(f"model.dispersion_correction.prefix will be trained")
+    #             no_decay_interactions[name]  = param
     param_options = dict(
         params=[
             {
@@ -906,6 +906,22 @@ def get_params_options(
         amsgrad=args.amsgrad,
         betas=(args.beta, 0.999),
     )
+    # 初始化prefix参数组（初始学习率为0）
+    if args.d3_train and has_dftd_submodule(model, "dispersion_correction"):
+        prefix_param = model.dispersion_correction.prefix
+        prefix_param.requires_grad = True  # 确保梯度计算开启
+        prefix_params = [prefix_param]
+        # 添加prefix参数组（初始lr=0）
+        param_options["params"].append(
+            {
+                "name": "d3_prefix",
+                "params": prefix_params,
+                "weight_decay": 0.0,
+                "lr": 0.0,  # 初始学习率为0
+            }
+        )
+        logging.info(f"Registered prefix parameter for delayed training (initial lr=0)")
+
     return param_options
 
 

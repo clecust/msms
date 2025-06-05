@@ -195,8 +195,18 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p=None,text
         generator=generator,
     )
 
-
     return new_loader
+
+
+def enable_prefix_training(
+    optimizer: torch.optim.Optimizer,
+    lr: float = 0.001,
+):
+    for param_group in optimizer.param_groups:
+        if param_group["name"] == "d3_prefix":
+            # 设置目标学习率（例如使用初始学习率）
+            param_group["lr"] = lr
+            logging.info(f"Activated prefix training, with lr={lr}")
 
 
 def train(
@@ -279,6 +289,8 @@ def train(
             if epoch > start_epoch:
                 swa.scheduler.step()
         if epoch == rigid_probability_epoch:
+            enable_prefix_training(optimizer, lr=0.0005)
+
             lowest_loss = np.inf
             train_loader = change_batch_size_with_probability(
                 train_loader,
