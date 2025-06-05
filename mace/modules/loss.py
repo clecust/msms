@@ -80,6 +80,16 @@ def weighted_mean_absolute_error_energy(
     return reduce_loss(raw_loss, ddp)
 
 
+def mean_squared_error_energy_mean(ref: Batch, pred: TensorDict) -> torch.Tensor:
+    # energy: [n_graphs, ]
+    if ref["energy"].shape[0] == 1:
+        return torch.mean(torch.square(ref["energy"] - pred["energy"]))
+    else:
+        pre_energy_minus = pred["energy"] - torch.mean(pred["energy"])
+        ref_energy_minus = ref["energy"] - torch.mean(ref["energy"])
+        return torch.mean(torch.square(ref_energy_minus - pre_energy_minus))  # []
+
+
 # ------------------------------------------------------------------------------
 # Stress and Virials Loss Functions
 # ------------------------------------------------------------------------------
@@ -220,6 +230,31 @@ def conditional_huber_forces(
 # ------------------------------------------------------------------------------
 # Loss Modules Combining Multiple Quantities
 # ------------------------------------------------------------------------------
+class WeightedEnergyMeanForcesLoss(torch.nn.Module):
+    # pre和ref都减去均值，从而删除nn的偏置(要求batch的结构在nn中的预测都是相同的)
+    # removing batch average in energy
+    def __init__(self, energy_weight=1.0, forces_weight=1.0) -> None:
+        super().__init__()
+        self.register_buffer(
+            "energy_weight",
+            torch.tensor(energy_weight, dtype=torch.get_default_dtype()),
+        )
+        self.register_buffer(
+            "forces_weight",
+            torch.tensor(forces_weight, dtype=torch.get_default_dtype()),
+        )
+
+    def forward(self, ref: Batch, pred: TensorDict) -> torch.Tensor:
+        return self.energy_weight * mean_squared_error_energy_mean(
+            ref, pred
+        ) + self.forces_weight * mean_squared_error_forces(ref, pred)
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}("
+            f"energy_weight={self.energy_weight:.3f}, "
+            f"forces_weight={self.forces_weight:.3f})"
+        )
 
 
 class WeightedEnergyForcesLoss(torch.nn.Module):
