@@ -125,7 +125,10 @@ def run(args) -> None:
     except AttributeError:
         logging.info("Cannot find MACE version, please install MACE via pip")
     logging.debug(f"Configuration: {args}")
-
+    ##
+    if args.d3_train:
+        args.finetune = True
+        logging.info(f"The args.d3_train equal True, forcing args.finetune = True.")
     tools.set_default_dtype(args.default_dtype)
     device = tools.init_device(args.device)
     commit = print_git_commit()
@@ -666,11 +669,11 @@ def run(args) -> None:
         logging.info("Converting model to CUEQ for accelerated training")
         assert model.__class__.__name__ in ["MACE", "ScaleShiftMACE","ScaleShiftMSMACE","ScaleShiftMSMACECSO","ScaleShiftMSMACECSOR"]
         model = run_e3nn_to_cueq(deepcopy(model), device=device)
-    logging.info(model)
     # Optimizer
     param_options = get_params_options(args, model)
     optimizer: torch.optim.Optimizer
     optimizer = get_optimizer(args, param_options)
+    logging.debug(optimizer)
     if args.device == "xpu":
         logging.info("Optimzing model and optimzier for XPU")
         model, optimizer = ipex.optimize(model, optimizer=optimizer)
@@ -778,6 +781,7 @@ def run(args) -> None:
         logging.info("DRY RUN mode enabled. Stopping now.")
         return
 
+    logging.info(model)
 
     tools.train(
         model=model,
