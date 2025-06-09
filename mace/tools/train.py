@@ -201,12 +201,21 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p=None,text
 def enable_prefix_training(
     optimizer: torch.optim.Optimizer,
     lr: float = 0.001,
+    p=None,
 ):
+    # only_train_cso = False
+    # if p == 1.0:
+    #     logging.info(f"Just prefix training, else lr = 0.0")
+    #     only_train_cso = True
+
     for param_group in optimizer.param_groups:
         if param_group["name"] == "d3_prefix":
             # 设置目标学习率（例如使用初始学习率）
             param_group["lr"] = lr
             logging.info(f"Activated prefix training, with lr={lr}")
+        ## 仅微调cso的参数
+        # elif only_train_cso:
+        #     param_group["lr"] = 0.0
 
 
 def train(
@@ -289,8 +298,10 @@ def train(
             if epoch > start_epoch:
                 swa.scheduler.step()
         if epoch == rigid_probability_epoch:
-            enable_prefix_training(optimizer, lr=0.0005)
-
+            enable_prefix_training(optimizer, lr=0.001,p=rigid_probability)
+            # if rigid_probability == 1.0:
+            #     loss_fn.energy_weight = torch.zeros_like(loss_fn.energy_weight)
+            #     logging.info(f"Change loss_fn.energy_weight to 0.0 ")
             lowest_loss = np.inf
             train_loader = change_batch_size_with_probability(
                 train_loader,
@@ -697,6 +708,20 @@ class MACELoss(Metric):
             self.delta_es_per_atom.append(
                 (batch.energy - output["energy"]) / (batch.ptr[1:] - batch.ptr[:-1])
             )
+        # if output.get("energy") is not None and batch.energy is not None:
+        #     self.Em_computed += 1.0
+        #     self.delta_ems.append(
+        #         batch.energy - output["energy"] - batch.energy.mean() + output["energy"].mean()
+        #     )
+        #     self.delta_ems_per_atom.append(
+        #         (
+        #             batch.energy
+        #             - output["energy"]
+        #             - batch.energy.mean()
+        #             + output["energy"].mean()
+        #         )
+        #         / (batch.ptr[1:] - batch.ptr[:-1])
+        #     )
         if output.get("forces") is not None and batch.forces is not None:
             self.Fs_computed += 1.0
             self.fs.append(batch.forces)
