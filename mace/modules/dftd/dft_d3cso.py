@@ -79,8 +79,9 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         self.register_buffer("a4", torch.tensor([a4], dtype=torch.get_default_dtype()))
         self.register_buffer("s6", torch.tensor([s6], dtype=torch.get_default_dtype()))
         self.prefix = torch.nn.Parameter(
-            torch.tensor([0.0], dtype=torch.get_default_dtype())
+            torch.tensor([1.0 - s6], dtype=torch.get_default_dtype())
         )
+
     def forward(
         self,
         dij: torch.Tensor,  # vec
@@ -104,8 +105,8 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         c6ij = torch.sqrt(c6[row] * c6[col])
         r0ij = 0.5 * (r0[row] + r0[col])
         node_num = Z.shape[0]
-
-        a1 = self.a1 * (torch.tanh(self.prefix)+1.0)
+        # self.prefix+self.s6 = 0.0 则色散作用＝0.0; 避免不起作用，但不设置上限
+        a1 = self.a1 * torch.relu(self.prefix+self.s6)
 
         # D3-CSO dispersion correction
         edisp = (
@@ -136,8 +137,8 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         force = torch.zeros((node_num, 3), device=dij.device, dtype=dij.dtype)
         # 聚合节点能量
         node_g = e6.new_zeros((node_num, 1))
-        node_g.index_add_(0, row, e6)
-        force.index_add_(0, row, force_contribution)
+        node_g.index_add_(0, col, e6)
+        force.index_add_(0, col, force_contribution)
 
         if not self.bidirectional:
             # 单向图 index_add_  scatter_add_
