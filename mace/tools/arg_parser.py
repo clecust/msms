@@ -130,6 +130,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "ScaleShiftMSMACE",
             "ScaleShiftMSMACECSO",
             "ScaleShiftMSMACECSOR",
+            "ScaleShiftMACECSO",
         ],
     )
     parser.add_argument(

@@ -126,9 +126,9 @@ def run(args) -> None:
         logging.info("Cannot find MACE version, please install MACE via pip")
     logging.debug(f"Configuration: {args}")
     ##
-    if args.d3_train:
-        args.finetune = True
-        logging.info(f"The args.d3_train equal True, forcing args.finetune = True.")
+    # if args.d3_train:
+    #     args.finetune = True
+    #     logging.info(f"The args.d3_train equal True, forcing args.finetune = True.")
     tools.set_default_dtype(args.default_dtype)
     device = tools.init_device(args.device)
     commit = print_git_commit()
@@ -667,7 +667,7 @@ def run(args) -> None:
     # Cueq
     if args.enable_cueq:
         logging.info("Converting model to CUEQ for accelerated training")
-        assert model.__class__.__name__ in ["MACE", "ScaleShiftMACE","ScaleShiftMSMACE","ScaleShiftMSMACECSO","ScaleShiftMSMACECSOR"]
+        assert model.__class__.__name__ in ["MACE", "ScaleShiftMACE","ScaleShiftMSMACE","ScaleShiftMSMACECSO","ScaleShiftMSMACECSOR","ScaleShiftMACECSO"]
         model = run_e3nn_to_cueq(deepcopy(model), device=device)
     # Optimizer
     param_options = get_params_options(args, model)

@@ -10,6 +10,7 @@ from mace.tools.scripts_utils import (
     extract_config_mace_model,
     extract_config_msmace_model,
     extract_config_msmacecso_model,
+    extract_config_macecso_model,
 )
 
 
@@ -115,7 +116,7 @@ def transfer_weights(
     target_dict = target_model.state_dict()
 
     # Transfer main weights
-    if model_info == 'mace':
+    if model_info == "mace" or model_info == "macecso":
         transfer_keys = get_transfer_keys(num_layers)
     elif model_info == "msmace" or model_info == "msmacecso":
         transfer_keys = get_transfer_keys_msmace(num_layers)
@@ -191,6 +192,9 @@ def run(
     ):
         model_info = "msmacecso"
         config = extract_config_msmacecso_model(source_model)
+    elif source_model.__class__.__name__ == "ScaleShiftMACECSO":
+        model_info = "macecso"
+        config = extract_config_macecso_model(source_model)
     else:
         model_info = 'mace'
         config = extract_config_mace_model(source_model)

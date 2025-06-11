@@ -41,6 +41,7 @@ from .models import (
     ScaleShiftMSMACE,
     ScaleShiftMSMACECSO,
     ScaleShiftMSMACECSOR,
+    ScaleShiftMACECSO,
 )
 from .radial import BesselBasis, GaussianBasis, PolynomialCutoff, ZBLBasis
 from .symmetric_contraction import SymmetricContraction
@@ -95,6 +96,7 @@ __all__ = [
     "ScaleShiftMACE",
     "ScaleShiftMSMACE",
     "ScaleShiftMSMACECSO",
+    "ScaleShiftMACECSO",
     "AtomicDipolesMACE",
     "EnergyDipolesMACE",
     "WeightedEnergyForcesLoss",

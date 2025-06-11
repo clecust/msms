@@ -844,6 +844,7 @@ from mace.modules import dftd
 @compile_mode("script")
 class ScaleShiftMSMACECSO_bak(torch.nn.Module):
     # libtorch-mace-lammps的接口没有问题；　但是基于向量求导的mliap-lammps接口出现问题！！
+    # 问题，可能出在最后cso汇聚时，用的edge_index[0] 汇聚到raw的ghost里，而不是col的local里，导致缺失部分色散力，从而密度发散；理论上，现在应该没问题了？
     def __init__(
         self,
         r_max: float,
@@ -881,8 +882,12 @@ class ScaleShiftMSMACECSO_bak(torch.nn.Module):
         self.register_buffer(
             "atomic_numbers", torch.tensor(atomic_numbers, dtype=torch.int64)
         )
-        self.r_min = r_min
-        self.r_mid = r_mid
+        self.register_buffer(
+            "r_mid", torch.tensor(r_mid, dtype=torch.get_default_dtype())
+        )
+        self.register_buffer(
+            "r_min", torch.tensor(r_min, dtype=torch.get_default_dtype())
+        )
         self.xc = xc
         self.register_buffer(
             "r_max", torch.tensor(r_max, dtype=torch.get_default_dtype())
@@ -1214,6 +1219,196 @@ class ScaleShiftMSMACECSO_bak(torch.nn.Module):
 
 
 @compile_mode("script")
+class ScaleShiftMACECSO(MACE):
+    def __init__(
+        self,
+        atomic_inter_scale: float,
+        atomic_inter_shift: float,
+        r_min: float,
+        r_max: float,
+        xc="pbe",
+        **kwargs,
+    ):
+        super().__init__(**kwargs, r_max=r_min)
+        self.register_buffer(
+            "r_min", torch.tensor(r_min, dtype=torch.get_default_dtype())
+        )
+        # 重新赋值
+        self.register_buffer(
+            "r_max", torch.tensor(r_max, dtype=torch.get_default_dtype())
+        )
+        self.scale_shift = ScaleShiftBlock(
+            scale=atomic_inter_scale, shift=atomic_inter_shift
+        )
+        self.dispersion_correction = dftd.D3CSO_Calculator_edge_forces(
+            xc=xc,
+            cutoff=r_max,
+            bidirectional=True,
+        )
+        self.xc = xc
+
+    def forward(
+        self,
+        data: Dict[str, torch.Tensor],
+        training: bool = False,
+        compute_force: bool = True,
+        compute_virials: bool = False,
+        compute_stress: bool = False,
+        compute_displacement: bool = False,
+        compute_hessian: bool = False,
+        compute_edge_forces: bool = False,
+        compute_atomic_stresses: bool = False,
+        lammps_mliap: bool = False,
+    ) -> Dict[str, Optional[torch.Tensor]]:
+        # Setup
+        ctx = prepare_graph(
+            data,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+            compute_displacement=compute_displacement,
+            lammps_mliap=lammps_mliap,
+        )
+
+        is_lammps = ctx.is_lammps
+        num_atoms_arange = ctx.num_atoms_arange
+        num_graphs = ctx.num_graphs
+        displacement = ctx.displacement
+        positions = ctx.positions
+        vectors = ctx.vectors
+        lengths = ctx.lengths
+        cell = ctx.cell
+        node_heads = ctx.node_heads
+        interaction_kwargs = ctx.interaction_kwargs
+        lammps_natoms = (
+            interaction_kwargs.lammps_natoms
+        )  # 分别为(n_real, n_ghost),加一起＝＝data["node_attrs"].shape[0]
+        lammps_class = interaction_kwargs.lammps_class
+
+        # Atomic energies
+        node_e0 = self.atomic_energies_fn(data["node_attrs"])[
+            num_atoms_arange, node_heads
+        ]
+        e0 = scatter_sum(
+            src=node_e0, index=data["batch"], dim=0, dim_size=num_graphs
+        )  # [n_graphs, num_heads]
+
+        # Embeddings
+        node_feats = self.node_embedding(data["node_attrs"])
+        # mask
+        rmin_mask = lengths.squeeze(1) < self.r_min
+        edge_index = data["edge_index"][:, rmin_mask]
+        edge_attrs = self.spherical_harmonics(vectors[rmin_mask])
+        edge_feats = self.radial_embedding(
+            lengths[rmin_mask],
+            data["node_attrs"],
+            edge_index,
+            self.atomic_numbers,
+        )
+        # edge_attrs = self.spherical_harmonics(vectors)
+        # edge_feats = self.radial_embedding(
+        #     lengths, data["node_attrs"], data["edge_index"], self.atomic_numbers
+        # )
+
+        if hasattr(self, "pair_repulsion"):
+            pair_node_energy = self.pair_repulsion_fn(
+                lengths, data["node_attrs"], data["edge_index"], self.atomic_numbers
+            )
+            if is_lammps:
+                pair_node_energy = pair_node_energy[: lammps_natoms[0]]
+        else:
+            pair_node_energy = torch.zeros_like(node_e0)
+
+        # Interactions
+        node_es_list = [pair_node_energy]
+        node_feats_list: List[torch.Tensor] = []
+
+        for i, (interaction, product, readout) in enumerate(
+            zip(self.interactions, self.products, self.readouts)
+        ):
+            node_attrs_slice = data["node_attrs"]
+            if is_lammps and i > 0:
+                node_attrs_slice = node_attrs_slice[: lammps_natoms[0]]
+            node_feats, sc = interaction(
+                node_attrs=node_attrs_slice,
+                node_feats=node_feats,
+                edge_attrs=edge_attrs,
+                edge_feats=edge_feats,
+                edge_index=edge_index,
+                first_layer=(i == 0),
+                lammps_class=lammps_class,
+                lammps_natoms=lammps_natoms,
+            )
+            if is_lammps and i == 0:
+                node_attrs_slice = node_attrs_slice[: lammps_natoms[0]]
+            node_feats = product(
+                node_feats=node_feats, sc=sc, node_attrs=node_attrs_slice
+            )
+            node_feats_list.append(node_feats)
+            node_es_list.append(
+                readout(node_feats, node_heads)[num_atoms_arange, node_heads]
+            )
+
+        node_feats_out = torch.cat(node_feats_list, dim=-1)
+        node_inter_es = torch.sum(torch.stack(node_es_list, dim=0), dim=0)
+        ######  dispersion_correction
+        node_disp, edge_disp_f = self.dispersion_correction(
+            vectors.detach() if is_lammps else vectors,  #
+            lengths.detach() if is_lammps else lengths,
+            data["edge_index"],
+            self.atomic_numbers[torch.argmax(data["node_attrs"], dim=1)],
+        )
+        if is_lammps:
+            node_disp = node_disp[: lammps_natoms[0]]
+        node_inter_es = self.scale_shift(node_inter_es, node_heads)+ node_disp 
+        inter_e = scatter_sum(node_inter_es, data["batch"], dim=-1, dim_size=num_graphs)
+
+        total_energy = e0 + inter_e
+        node_energy = node_e0.clone().double() + node_inter_es.clone().double()
+
+        forces, virials, stress, hessian, edge_forces = get_outputs(
+            energy=inter_e,
+            positions=positions,
+            displacement=displacement,
+            vectors=vectors,
+            cell=cell,
+            training=training,
+            compute_force=compute_force,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+            compute_hessian=compute_hessian,
+            compute_edge_forces=compute_edge_forces or compute_atomic_stresses,
+        )
+        if edge_forces is not None:
+            ### jiust in mliap # Match LAMMPS sign convention
+            edge_forces -= edge_disp_f
+        atomic_virials: Optional[torch.Tensor] = None
+        atomic_stresses: Optional[torch.Tensor] = None
+        if compute_atomic_stresses and edge_forces is not None:
+            atomic_virials, atomic_stresses = get_atomic_virials_stresses(
+                edge_forces=edge_forces,
+                edge_index=data["edge_index"],
+                vectors=vectors,
+                num_atoms=positions.shape[0],
+                batch=data["batch"],
+                cell=cell,
+            )
+        return {
+            "energy": total_energy,
+            "node_energy": node_energy,
+            "interaction_energy": inter_e,
+            "forces": forces,
+            "edge_forces": edge_forces,
+            "virials": virials,
+            "stress": stress,
+            "atomic_virials": atomic_virials,
+            "atomic_stresses": atomic_stresses,
+            "hessian": hessian,
+            "displacement": displacement,
+            "node_feats": node_feats_out,
+        }
+
+
+@compile_mode("script")
 class ScaleShiftMSMACECSO(torch.nn.Module):
     # libtorch-mace-lammps的接口没有问题；　但是基于向量求导的mliap-lammps接口出现问题！！
     # 采用解析解的方式，太复杂，而且难以平衡mace-lammps和mliap-lammps的接口，另外还有Pytroch训练的接口
@@ -1256,11 +1451,17 @@ class ScaleShiftMSMACECSO(torch.nn.Module):
         self.register_buffer(
             "atomic_numbers", torch.tensor(atomic_numbers, dtype=torch.int64)
         )
-        self.r_min = r_min
-        self.r_mid = r_mid
+        # self.r_min = r_min
+        # self.r_mid = r_mid
         self.xc = xc
         self.register_buffer(
             "r_max", torch.tensor(r_max, dtype=torch.get_default_dtype())
+        )
+        self.register_buffer(
+            "r_mid", torch.tensor(r_mid, dtype=torch.get_default_dtype())
+        )
+        self.register_buffer(
+            "r_min", torch.tensor(r_min, dtype=torch.get_default_dtype())
         )
         self.register_buffer(
             "num_interactions", torch.tensor(num_interactions, dtype=torch.int64)
@@ -1840,7 +2041,12 @@ class ScaleShiftMSMACECSOR(torch.nn.Module):
         # Embeddings
         node_feats = self.node_embedding(data["node_attrs"])
         ### R
+        # index[0] 包括ghost的索引；而index[1]仅使用local的索引(mace默认)；但维度一致，应该是local和ghost的映射
         # vectors.requires_grad_(True)
+        print(data.keys())
+        # print(data["edge_index"][0].shape, data["edge_index"][0].max())
+        # print(data["edge_index"][1].shape, data["edge_index"][1].max())
+
         mask_index = data["edge_index"][0] < data["edge_index"][1]
         # mask_index = torch.ones_like(mask_index).bool() # debug
         edge_index_r = data["edge_index"][:, mask_index]

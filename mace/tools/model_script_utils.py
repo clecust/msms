@@ -275,6 +275,23 @@ def _build_model(
             long_radial_type=args.long_radial_type,
             heads=heads,
         )
+    if args.model == "ScaleShiftMACECSO":
+        return modules.ScaleShiftMACECSO(
+            **model_config,
+            pair_repulsion=args.pair_repulsion,
+            distance_transform=args.distance_transform,
+            correlation=args.correlation,
+            gate=modules.gate_dict[args.gate],
+            interaction_cls_first=modules.interaction_classes[args.interaction_first],
+            MLP_irreps=o3.Irreps(args.MLP_irreps),
+            atomic_inter_scale=args.std,
+            atomic_inter_shift=args.mean,
+            r_min=args.r_min,
+            xc=args.xc,
+            radial_MLP=ast.literal_eval(args.radial_MLP),
+            radial_type=args.radial_type,
+            heads=heads,
+        )
     if args.model == "ScaleShiftMSMACECSOR":
         avg_num_neighbors = (
             model_config["avg_num_neighbors"] * (args.r_mid / args.r_max) ** 3
