@@ -1011,10 +1011,10 @@ def get_params_options(
         prefix_param = model.dispersion_correction.prefix
         prefix_param.requires_grad = True  # 确保梯度计算开启
         prefix_params = [prefix_param]
-        if   args.d3_train    and args.finetune:
+        if   args.d3_train :  # and args.finetune:
             #### 用于后续微调，只用开启 --d3_train 激活，注意其他伴随的（能量权重和初始学习率）
             # logging.info(f"Only Training prefix parameter with initial lr={args.lr}")
-            #### --d3_train 激活训练，否则lr=0.0,不训练
+            #### --d3_train 激活训练，否则lr=0.0,不训练; 
             param_options["params"].append({
                 "name": "d3_prefix",
                 "params": prefix_params,
