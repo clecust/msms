@@ -18,15 +18,28 @@ def old2new_ref(atoms_list):
         except Exception as e:  # pylint: disable=W0703
             pass
         try:
-            atoms.info["REF_virial"] = atoms.info['virial']
+            if 'virial' in atoms.info :
+                atoms.info["REF_virials"] = atoms.info['virial']
+                del atoms.info["virial"]
+            elif "REF_virial" in atoms.info:
+                atoms.info["REF_virials"] = atoms.info["REF_virial"]
+                del atoms.info["REF_virial"]
         except Exception as e:  # pylint: disable=W0703
             pass
+        try:
+            #  ASE 默认定义为压缩为正，而有些软件（如 DFTB和LAMMPS,cp2k）是张力为正。
+            atoms.info["REF_stress"] = -atoms.info["REF_virials"] / atoms.get_volume()
+        except Exception as e:  # pylint: disable=W0703
+            pass
+        if 'config_weight' in atoms.info:
+            if atoms.info['config_weight'] == 50.0:
+                atoms.info['config_weight'] = 1.01
         atoms.calc = None
     return atoms_list
 
 
 if __name__ == "__main__":
-    paths = [r"/home/giga/code/ms4mace/code/ms4mace/data/data_*.xyz"]
+    paths = [r"/home/giga/BIG/al/param_rigid_3090_c6238_v14_pbe_vis/data/AL_23.xyz"]
     path_lists = []
     for path in paths:
         if "*" in path:
@@ -42,5 +55,6 @@ if __name__ == "__main__":
         atoms_list = read(pls, format="extxyz", index=":")
         atoms_list = old2new_ref(atoms_list)
 
-        save_pls = pls.replace('.xyz',"ref.xyz")
+        save_pls = pls.replace('.xyz',"w101.xyz")
+        print(f"save to {save_pls}")
         write(save_pls, atoms_list, append=False)
