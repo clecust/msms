@@ -167,6 +167,13 @@ class LAMMPS_MLIAP_MACE(MLIAPUnified):
 
     def _prepare_batch(self, data, natoms, nghosts, species):
         """Prepare the input batch for the MACE model."""
+        # iatoms ielems nlistatoms nlocal　都是local原子的信息，不包含ghost的
+        # npairs就是pair的数目
+        # jatoms == pair_j ; 但是iatoms是中心原子数目
+        # print(f"jatoms={data.jatoms}")
+        # print(f"iatoms={data.iatoms}")
+        # print(f"pair_i={data.pair_i}")
+
         return {
             "vectors": torch.as_tensor(data.rij).to(self.dtype).to(self.device),
             "node_attrs": torch.nn.functional.one_hot(
