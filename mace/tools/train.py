@@ -186,13 +186,15 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p=None,text
         logging.info(
             f"{text}: New batch_size = {new_batch_size}, the old_batch_size={old_batch_size}"
         )
+    # 当使用自定义采样器时，不要设置shuffle=True，避免冲突
+    shuffle = sampler is None
     # 创建新的 DataLoader
     new_loader = torch_geometric.dataloader.DataLoader(
         dataset=dataset,
         batch_size=new_batch_size,
         sampler=sampler,
-        shuffle=False,  # 采样器已处理打乱
-        drop_last=True,
+        shuffle=shuffle,
+        drop_last=False,
         pin_memory=pin_memory,
         num_workers=num_workers,
         generator=generator,
@@ -306,7 +308,7 @@ def train(
             #     loss_fn.energy_weight = torch.zeros_like(loss_fn.energy_weight)
             #     logging.info(f"Change loss_fn.energy_weight to 0.0 ")
             ### 判断当前的batch是不是等于rigid_probability_batch；不等于则重新，等于就跳过
-            lowest_loss = np.inf
+            # lowest_loss = np.inf
             train_loader = change_batch_size_with_probability(
                 train_loader,
                 rigid_probability_batch,
