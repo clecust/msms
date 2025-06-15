@@ -156,7 +156,7 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p=None,text
     worker_init_fn = train_loader.worker_init_fn
     multiprocessing_context = train_loader.multiprocessing_context
     generator = train_loader.generator
-
+    old_batch_size = train_loader.batch_size
     # 分离两种标签的数据索引
     if p is not None:
         p = max(0.0, min(1.0, p))
@@ -179,11 +179,13 @@ def change_batch_size_with_probability(train_loader, new_batch_size, p=None,text
             replacement=True,
         )
         logging.info(
-        f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size = {new_batch_size}"
-    )
+            f"{text}: Using ProbabilisticSampler with p={p}: each batch contains ~{int(p*100)}% weight>1 and ~{int((1-p)*100)}% weight=1 samples, with new batch_size = {new_batch_size}, the old_batch_size={old_batch_size}"
+        )
     else:
         sampler = None
-        logging.info(f"{text}: New batch_size = {new_batch_size}")
+        logging.info(
+            f"{text}: New batch_size = {new_batch_size}, the old_batch_size={old_batch_size}"
+        )
     # 创建新的 DataLoader
     new_loader = torch_geometric.dataloader.DataLoader(
         dataset=dataset,
@@ -298,11 +300,12 @@ def train(
             swa.model.update_parameters(model)
             if epoch > start_epoch:
                 swa.scheduler.step()
-        if epoch == rigid_probability_epoch:
+        if epoch >= rigid_probability_epoch and train_loader.batch_size != rigid_probability_batch:
             # enable_prefix_training(optimizer, lr=0.001,p=rigid_probability)
             # if rigid_probability == 1.0:
             #     loss_fn.energy_weight = torch.zeros_like(loss_fn.energy_weight)
             #     logging.info(f"Change loss_fn.energy_weight to 0.0 ")
+            ### 判断当前的batch是不是等于rigid_probability_batch；不等于则重新，等于就跳过
             lowest_loss = np.inf
             train_loader = change_batch_size_with_probability(
                 train_loader,
@@ -313,7 +316,7 @@ def train(
             for valid_loader_name in valid_loaders:
                 valid_loaders[valid_loader_name] = change_batch_size_with_probability(
                     valid_loaders[valid_loader_name],
-                    rigid_probability_batch*2,
+                    rigid_probability_batch,
                     p=rigid_probability,
                     text="valid_loader",
                 )
@@ -407,13 +410,13 @@ def train(
                                 f"Stopping optimization after {patience_counter} epochs without improvement and starting Stage Two"
                             )
                             epoch = swa.start
-                        elif (
-                            epoch < rigid_probability_epoch
-                        ):
-                            logging.info(
-                                f"Stopping optimization after {patience_counter} epochs without improvement and starting rigid_probability"
-                            )
-                            epoch = rigid_probability_epoch
+                        # elif (
+                        #     epoch < rigid_probability_epoch
+                        # ):
+                        #     logging.info(
+                        #         f"Stopping optimization after {patience_counter} epochs without improvement and starting rigid_probability"
+                        #     )
+                        #     epoch = rigid_probability_epoch
                         else:
                             logging.info(
                                 f"Stopping optimization after {patience_counter} epochs without improvement"
