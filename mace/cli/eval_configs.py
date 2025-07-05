@@ -50,6 +50,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
     )
     parser.add_argument(
+        "--return_node_feats",
+        help="all can",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--info_prefix",
         help="prefix for energy, forces and stress keys",
         type=str,
@@ -114,6 +120,7 @@ def run(args: argparse.Namespace) -> None:
     contributions_list = []
     stresses_list = []
     forces_collection = []
+    node_feats_list = []
 
     for batch in data_loader:
         batch = batch.to(device)
@@ -124,6 +131,14 @@ def run(args: argparse.Namespace) -> None:
 
         if args.return_contributions:
             contributions_list.append(torch_tools.to_numpy(output["contributions"]))
+
+        if args.return_node_feats:
+            node_feats = np.split(
+                torch_tools.to_numpy(output["node_feats"]),
+                indices_or_sections=batch.ptr[1:],
+                axis=0,
+            )
+            node_feats_list.append(node_feats[:-1])
 
         forces = np.split(
             torch_tools.to_numpy(output["forces"]),
@@ -145,6 +160,12 @@ def run(args: argparse.Namespace) -> None:
         contributions = np.concatenate(contributions_list, axis=0)
         assert len(atoms_list) == contributions.shape[0]
 
+    if args.return_node_feats:
+        node_feats_list = [
+            forces for forces_list in node_feats_list for forces in forces_list
+        ]
+        assert len(atoms_list) == len(node_feats_list)
+
     # Store data in atoms objects
     for i, (atoms, energy, forces) in enumerate(zip(atoms_list, energies, forces_list)):
         atoms.calc = None  # crucial
@@ -157,6 +178,8 @@ def run(args: argparse.Namespace) -> None:
         if args.return_contributions:
             atoms.info[args.info_prefix + "BO_contributions"] = contributions[i]
 
+        if args.return_node_feats:
+            atoms.arrays[args.info_prefix + "node_feats"] = node_feats_list[i]
     # Write atoms to output path
     ase.io.write(args.output, images=atoms_list, format="extxyz")
 
