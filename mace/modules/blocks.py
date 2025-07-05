@@ -262,16 +262,20 @@ class EquivariantProductBasisBlock(torch.nn.Module):
         super().__init__()
 
         self.use_sc = use_sc
+
+        lmax = o3.Irreps(target_irreps).lmax
+        dim = o3.Irreps(node_feats_irreps).count(o3.Irrep(0, 1))
+        irreps_mid = (o3.Irreps.spherical_harmonics(lmax) * dim).sort()[0].simplify()
         self.symmetric_contractions = SymmetricContractionWrapper(
             irreps_in=node_feats_irreps,
-            irreps_out=target_irreps,
+            irreps_out=irreps_mid,
             correlation=correlation,
             num_elements=num_elements,
             cueq_config=cueq_config,
         )
         # Update linear
         self.linear = Linear(
-            target_irreps,
+            irreps_mid,
             target_irreps,
             internal_weights=True,
             shared_weights=True,
@@ -718,7 +722,7 @@ class RealAgnosticResidualInteractionBlockMS(torch.nn.Module):
         self.skip_tp = FullyConnectedTensorProduct(
             self.node_feats_irreps,
             self.node_attrs_irreps,
-            self.hidden_irreps,
+            self.hidden_irreps,  # irreps_out hidden_irreps
             cueq_config=self.cueq_config,
         )
         self.reshape = reshape_irreps(self.irreps_out, cueq_config=self.cueq_config)
@@ -758,6 +762,7 @@ class RealAgnosticResidualInteractionBlockMS(torch.nn.Module):
         message = scatter_sum(
             src=mji, index=receiver, dim=0, dim_size=num_nodes
         )  # [n_nodes, irreps]
+        message = self.linear(message)
         ### long
         long_tp_weights = self.long_conv_tp_weights(long_edge_feats)
         long_mji = self.long_conv_tp(
@@ -768,6 +773,170 @@ class RealAgnosticResidualInteractionBlockMS(torch.nn.Module):
         )  # [n_nodes, irreps]
         long_message = self.long_linear(long_message)
         message = message + long_message
+        #
+        message = self.truncate_ghosts(message, n_real)
+        node_attrs = self.truncate_ghosts(node_attrs, n_real)
+        sc = self.truncate_ghosts(sc, n_real)
+        return (
+            self.reshape(message / self.avg_num_neighbors),
+            sc,
+        )  # [n_nodes, channels, (lmax + 1)**2]
+
+
+@compile_mode("script")
+class RealAgnosticResidualInteractionBlockMS_noL(torch.nn.Module):
+    # 没有远程的计算，作为第一层，但保留接口
+    def __init__(
+        self,
+        node_attrs_irreps: o3.Irreps,
+        node_feats_irreps: o3.Irreps,
+        edge_attrs_irreps: o3.Irreps,
+        edge_feats_irreps: o3.Irreps,
+        target_irreps: o3.Irreps,
+        hidden_irreps: o3.Irreps,
+        avg_num_neighbors: float,
+        long_node_feats_irreps: o3.Irreps,
+        long_edge_attrs_irreps: o3.Irreps,
+        long_edge_feats_irreps: o3.Irreps,
+        radial_MLP: Optional[List[int]] = None,
+        long_radial_MLP: Optional[List[int]] = None,
+        cueq_config: Optional[CuEquivarianceConfig] = None,
+    ) -> None:
+        super().__init__()
+        self.node_attrs_irreps = node_attrs_irreps
+        self.node_feats_irreps = node_feats_irreps
+        self.edge_attrs_irreps = edge_attrs_irreps
+        self.edge_feats_irreps = edge_feats_irreps
+        self.target_irreps = target_irreps
+        self.hidden_irreps = hidden_irreps
+        # self.avg_num_neighbors = avg_num_neighbors
+        self.register_buffer(
+            "avg_num_neighbors",
+            torch.tensor([avg_num_neighbors], dtype=torch.get_default_dtype()),
+        )
+
+        if radial_MLP is None:
+            radial_MLP = [64, 64, 64]
+        self.radial_MLP = radial_MLP
+        self.long_node_feats_irreps = long_node_feats_irreps
+        self.long_edge_attrs_irreps = long_edge_attrs_irreps
+        self.long_edge_feats_irreps = long_edge_feats_irreps
+        if long_radial_MLP is None:
+            long_radial_MLP = [64, 64, 64]
+        self.long_radial_MLP = long_radial_MLP
+        self.cueq_config = cueq_config
+        self._setup()
+
+    def handle_lammps(
+        self,
+        node_feats: torch.Tensor,
+        lammps_class: Optional[Any],
+        lammps_natoms: Tuple[int, int],
+        first_layer: bool,
+    ) -> torch.Tensor:  # noqa: D401 – internal helper
+        if lammps_class is None or first_layer or torch.jit.is_scripting():
+            return node_feats
+        _, n_total = lammps_natoms
+        pad = torch.zeros(
+            (n_total, node_feats.shape[1]),
+            dtype=node_feats.dtype,
+            device=node_feats.device,
+        )  # ghost
+        node_feats = torch.cat((node_feats, pad), dim=0)  # [local+ghost]
+        # 下面使用lammps发生消息传递，local的节点信息不变，但是ghost的变化（从赋值的0变到非0，也就是从别的gpu上复制过来了，如果是单卡，则就是从ghost对应的local位置复制过来）！
+        node_feats = LAMMPS_MP.apply(node_feats, lammps_class)
+        return node_feats
+
+    def truncate_ghosts(
+        self, tensor: torch.Tensor, n_real: Optional[int] = None
+    ) -> torch.Tensor:
+        """Truncate the tensor to only keep the real atoms in case of presence of ghost atoms during multi-GPU MD simulations."""
+        return tensor[:n_real] if n_real is not None else tensor
+
+    def _setup(self) -> None:
+        if not hasattr(self, "cueq_config"):
+            self.cueq_config = None
+        # First linear
+        self.linear_up = Linear(
+            self.node_feats_irreps,
+            self.node_feats_irreps,
+            internal_weights=True,
+            shared_weights=True,
+            cueq_config=self.cueq_config,
+        )
+        # TensorProduct
+        irreps_mid, instructions = tp_out_irreps_with_instructions(
+            self.node_feats_irreps,
+            self.edge_attrs_irreps,
+            self.target_irreps,
+        )
+        self.conv_tp = TensorProduct(
+            self.node_feats_irreps,
+            self.edge_attrs_irreps,
+            irreps_mid,
+            instructions=instructions,
+            shared_weights=False,
+            internal_weights=False,
+            cueq_config=self.cueq_config,
+        )
+
+        # Convolution weights
+        input_dim = self.edge_feats_irreps.num_irreps
+        self.conv_tp_weights = nn.FullyConnectedNet(
+            [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
+            torch.nn.functional.silu,  # gate
+        )
+        # Linear
+        self.irreps_out = self.target_irreps
+        self.linear = Linear(
+            irreps_mid,
+            self.irreps_out,
+            internal_weights=True,
+            shared_weights=True,
+            cueq_config=self.cueq_config,
+        )
+        # Selector TensorProduct
+        self.skip_tp = FullyConnectedTensorProduct(
+            self.node_feats_irreps,
+            self.node_attrs_irreps,
+            self.hidden_irreps,
+            cueq_config=self.cueq_config,
+        )
+        self.reshape = reshape_irreps(self.irreps_out, cueq_config=self.cueq_config)
+
+    def forward(
+        self,
+        node_attrs: torch.Tensor,
+        node_feats: torch.Tensor,
+        edge_attrs: torch.Tensor,
+        edge_feats: torch.Tensor,
+        edge_index: torch.Tensor,
+        long_edge_attrs: torch.Tensor,
+        long_edge_feats: torch.Tensor,
+        long_edge_index: torch.Tensor,
+        lammps_class: Optional[Any] = None,
+        lammps_natoms: Tuple[int, int] = (0, 0),
+        first_layer: bool = False,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        sender = edge_index[0]
+        receiver = edge_index[1]
+        num_nodes = node_feats.shape[0]
+        n_real = lammps_natoms[0] if lammps_class is not None else None
+        sc = self.skip_tp(node_feats, node_attrs)
+        node_feats = self.linear_up(node_feats)
+        node_feats = self.handle_lammps(
+            node_feats,
+            lammps_class=lammps_class,
+            lammps_natoms=lammps_natoms,
+            first_layer=first_layer,
+        )
+        tp_weights = self.conv_tp_weights(edge_feats)
+        mji = self.conv_tp(
+            node_feats[sender], edge_attrs, tp_weights
+        )  # [n_edges, irreps]
+        message = scatter_sum(
+            src=mji, index=receiver, dim=0, dim_size=num_nodes
+        )  # [n_nodes, irreps]
         #
         message = self.truncate_ghosts(message, n_real)
         node_attrs = self.truncate_ghosts(node_attrs, n_real)
