@@ -241,6 +241,8 @@ def _build_model(
             long_node_feats_irreps=o3.Irreps(args.long_node_feats_irreps),
             long_max_ell=args.long_max_ell,
             long_radial_type=args.long_radial_type,
+            first_noL=args.first_noL,
+            ep_features_num=args.ep_features_num,
             r_min=args.r_min,
             radial_type=args.radial_type,
             heads=heads,

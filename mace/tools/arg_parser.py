@@ -134,6 +134,18 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         ],
     )
     parser.add_argument(
+        "--ep_features_num",
+        help="ep_features_num",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--first_noL",
+        help="use first_noL",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--r_max", help="distance cutoff (in Ang)", type=float, default=5.0
     )
     parser.add_argument(

@@ -11,7 +11,16 @@ from ase_old_2_new_ref import old2new_ref
 
 if __name__ == "__main__":
 
-    lammps_path = r"/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-mliap_lammps.pt.lammpstrj"
+    # lammps_path = r"/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-mliap_lammps.pt.lammpstrj"
+    # lammps_path = r"/home/giga/code/msms/run/checkpoints/msmace_r4_debug_run-1.model-mliap_lammps.pt.lammpstrj"
+    # lammps_path = r"/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt.lammpstrj"
+    # lammps_path = (
+    #     "/home/giga/code/msms/run/checkpoints/mace_r4_run-1.model-lammps.pt.lammpstrj"
+    # )
+    # lammps_path = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-lammps.pt.lammpstrj"
+    lammps_path = "/home/giga/code/msms/run/checkpoints/msmacecsor_water_run-1.model-mliap_lammps.pt.lammpstrj"
+    # lammps_path = "/home/giga/code/msms/run/checkpoints/msmacecsor_water_run-1.model-lammps.pt.lammpstrj"
+    # lammps_path = "/home/giga/code/msms/run/checkpoints/msmacecsor_r10_debug_run-1.model-lammps.pt.lammpstrj"
     specorder = [ "O", "H"]
 
     if "pdb" in lammps_path:

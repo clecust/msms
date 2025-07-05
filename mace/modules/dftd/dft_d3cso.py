@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from e3nn.util.jit import compile_mode
 import numpy as np
+
 try:
     from .dftd2_params import r0, c6, d3_autoang, c6conv
 except:
@@ -47,39 +48,45 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         self.d3_autoang = 0.52917726  # for converting distance from bohr to angstrom
         self.d3_autoev = 27.21138505  # for converting a.u. to eV
         self.cutoff = cutoff / self.d3_autoang
+        self.is_train: bool = False
 
         s6 = 0.73
         a2 = 2.5
         a4 = 6.25
         xc = xc.upper()
-        if xc == "BLYP":
-            a1 = 1.28
-        elif xc == "BP86":
-            a1 = 1.01
-        elif xc == "PBE":
-            a1 = 0.24
-        elif xc == "TPSS":
-            a1 = 0.72
-        elif xc == "B3LYP":
-            a1 = 0.86
-        elif xc == "PBE0":
-            a1 = 0.20
-        elif xc == "PW6B95":
-            a1 = -0.15
-        elif xc == "B2PLYP":
-            a1 = 0.24
-        elif xc == "BAMBOO":
-            a1 = 0.82
-            s6 = 0.85
-            a4 = 4.5
+
+        if xc == 'TRAIN':
+            self.is_train = True
+            a1 = -s6
         else:
-            raise ValueError(f"[ERROR] Unexpected value xc={xc}")
+            if xc == "BLYP":
+                a1 = 1.28
+            elif xc == "BP86":
+                a1 = 1.01
+            elif xc == "PBE":
+                a1 = 0.24
+            elif xc == "TPSS":
+                a1 = 0.72
+            elif xc == "B3LYP":
+                a1 = 0.86
+            elif xc == "PBE0":
+                a1 = 0.20
+            elif xc == "PW6B95":
+                a1 = -0.15
+            elif xc == "B2PLYP":
+                a1 = 0.24
+            elif xc == "BAMBOO":
+                a1 = 0.82
+                s6 = 0.85
+                a4 = 4.5
+            else:
+                raise ValueError(f"[ERROR] Unexpected value xc={xc}")
         self.register_buffer("a1", torch.tensor([a1], dtype=torch.get_default_dtype()))
         self.register_buffer("a2", torch.tensor([a2], dtype=torch.get_default_dtype()))
         self.register_buffer("a4", torch.tensor([a4], dtype=torch.get_default_dtype()))
         self.register_buffer("s6", torch.tensor([s6], dtype=torch.get_default_dtype()))
         self.prefix = torch.nn.Parameter(
-            torch.tensor([1.0 - s6], dtype=torch.get_default_dtype())
+            torch.tensor([s6], dtype=torch.get_default_dtype())
         )
 
     def forward(
@@ -105,8 +112,15 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         c6ij = torch.sqrt(c6[row] * c6[col])
         r0ij = 0.5 * (r0[row] + r0[col])
         node_num = Z.shape[0]
+        # a1 = self.a1 * (torch.tanh(self.prefix)+1.0)
+
         # self.prefix+self.s6 = 0.0 则色散作用＝0.0; 避免不起作用，但不设置上限
-        a1 = self.a1 * torch.relu(self.prefix+self.s6)
+        # a1 = self.a1 * torch.relu(self.prefix + self.s6)
+        # a1 = torch.relu(self.a1 + self.prefix) - self.s6
+        if self.is_train:
+            a1 = torch.relu(self.prefix) - self.s6
+        else:
+            a1 = self.a1 
 
         # D3-CSO dispersion correction
         edisp = (
@@ -305,7 +319,7 @@ class D3CSO_Calculator_f(nn.Module):
             0.5 * node_g.squeeze(-1) * self.d3_autoev,
             force * self.d3_autoev / self.d3_autoang,
             0.5 * -node_virials * self.d3_autoev,
-            force_contribution * self.d3_autoev / self.d3_autoang
+            force_contribution * self.d3_autoev / self.d3_autoang,
         )  # node, node, node , edge
 
 
@@ -416,7 +430,7 @@ class D3CSO_Calculator(nn.Module):
         node_g = e6.new_zeros((Z.shape[0], 1))
         node_g.index_add_(0, row, e6)
         if not self.bidirectional:
-            # 单向图 
+            # 单向图
             node_g *= 2.0
         return node_g.squeeze(-1) * self.d3_autoev
 
@@ -433,7 +447,7 @@ if __name__ == "__main__":
     TYPE = "OO"  # 6
     Z = torch.tensor([8, 8], dtype=torch.long)
     label1 = ["bj", "b3-lyp"]  # b-lyp
-    dftd2 = D3CSO_Calculator_f(cutoff=10.0, xc="B3LYP") 
+    dftd2 = D3CSO_Calculator_f(cutoff=10.0, xc="B3LYP")
     # dftd2 = D3CSO_Calculator(cutoff=10.0, xc="B3LYP")
 
     # 初始距离（埃）
@@ -457,19 +471,16 @@ if __name__ == "__main__":
     r = torch.tensor(distances, dtype=torch.float32)
     # [i1,i2,...] [j1,j2,...]
     edge_index = torch.tensor(
-        [
-            [0, 1],
-            [1, 0]
-        ],
+        [[0, 1], [1, 0]],
         dtype=torch.long,
     )
     batch = torch.tensor([0, 0], dtype=torch.long)
     energy2 = []
     forces2 = []
     for idx, rs in enumerate(r):
-        pos = (
-            torch.tensor(positions_list[idx], dtype=torch.get_default_dtype()).requires_grad_(True)
-        )
+        pos = torch.tensor(
+            positions_list[idx], dtype=torch.get_default_dtype()
+        ).requires_grad_(True)
         vec = pos[edge_index[1]] - pos[edge_index[0]]
         rs = torch.linalg.norm(vec, dim=-1, keepdim=True)
         # E_disp = dftd2(rs, edge_index, Z, batch)
@@ -502,7 +513,7 @@ if __name__ == "__main__":
                 damping=label1[0],
                 xc=label1[1],
                 old=False,
-                cutoff=10.0  ,
+                cutoff=10.0,
             )
         )
         energy1.append(atom.get_potential_energy())

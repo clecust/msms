@@ -418,6 +418,8 @@ def extract_config_msmace_model(model: torch.nn.Module) -> Dict[str, Any]:
     except AttributeError:
         correlation = model.products[0].symmetric_contractions.contraction_degree
     config = {
+        "first_noL": model.first_noL,
+        "ep_features_num": model.ep_features_num,
         "r_max": model.r_max.item(),
         "r_min": model.r_min,
         "num_bessel": len(model.radial_embedding.bessel_fn.bessel_weights),
@@ -439,7 +441,7 @@ def extract_config_msmace_model(model: torch.nn.Module) -> Dict[str, Any]:
             else None
         ),
         "atomic_energies": model.atomic_energies_fn.atomic_energies.cpu().numpy(),
-        "avg_num_neighbors": model.interactions[0].avg_num_neighbors,
+        "avg_num_neighbors": model.interactions[-1].avg_num_neighbors,
         "atomic_numbers": model.atomic_numbers,
         "correlation": correlation,
         "radial_type": radial_to_name(
@@ -448,8 +450,8 @@ def extract_config_msmace_model(model: torch.nn.Module) -> Dict[str, Any]:
         "long_radial_type": radial_to_name(
             model.long_radial_embedding.bessel_fn.__class__.__name__
         ),
-        "radial_MLP": model.interactions[0].conv_tp_weights.hs[1:-1],
-        "long_radial_MLP": model.interactions[0].long_conv_tp_weights.hs[1:-1],
+        "radial_MLP": model.interactions[-1].conv_tp_weights.hs[1:-1],
+        "long_radial_MLP": model.interactions[-1].long_conv_tp_weights.hs[1:-1],
         "pair_repulsion": hasattr(model, "pair_repulsion_fn"),
         "distance_transform": radial_to_transform(model.radial_embedding),
         "atomic_inter_scale": scale.cpu().numpy(),
@@ -1011,29 +1013,32 @@ def get_params_options(
         prefix_param = model.dispersion_correction.prefix
         prefix_param.requires_grad = True  # 确保梯度计算开启
         prefix_params = [prefix_param]
-        if   args.d3_train :  # and args.finetune:
-            #### 用于后续微调，只用开启 --d3_train 激活，注意其他伴随的（能量权重和初始学习率）
-            # logging.info(f"Only Training prefix parameter with initial lr={args.lr}")
-            #### --d3_train 激活训练，否则lr=0.0,不训练; 
-            param_options["params"].append({
+        # if   args.d3_train :  # and args.finetune:
+        #### 用于后续微调，只用开启 --d3_train 激活，注意其他伴随的（能量权重和初始学习率）
+        # logging.info(f"Only Training prefix parameter with initial lr={args.lr}")
+        #### --d3_train 激活训练，否则lr=0.0,不训练;
+        cso_lr = float(args.lr)*0.1
+        param_options["params"].append(
+            {
                 "name": "d3_prefix",
                 "params": prefix_params,
                 "weight_decay": 0.0,
-                "lr":args.lr,  # 初始学习率为args.lr
-            })
-            logging.info(f"Append CSO.prefix parameter with initial lr={args.lr}")
+                "lr": cso_lr,  # 初始学习率为args.lr
+            }
+        )
+        logging.info(f"Append CSO.prefix parameter with initial lr={cso_lr}")
 
-        else:
-            # 添加prefix参数组（初始lr=0）,用于初始训练，后续在epoch == rigid_probability_epoch时赋予非零的lr值
-            param_options["params"].append(
-                {
-                    "name": "d3_prefix",
-                    "params": prefix_params,
-                    "weight_decay": 0.0,
-                    "lr": 0.0,  # 初始学习率为0
-                }
-            )
-            logging.info(f"Registered prefix parameter ,but initial with lr=0")
+        # else:
+        #     # 添加prefix参数组（初始lr=0）,用于初始训练，后续在epoch == rigid_probability_epoch时赋予非零的lr值
+        #     param_options["params"].append(
+        #         {
+        #             "name": "d3_prefix",
+        #             "params": prefix_params,
+        #             "weight_decay": 0.0,
+        #             "lr": 0.0,  # 初始学习率为0
+        #         }
+        #     )
+        #     logging.info(f"Registered prefix parameter ,but initial with lr=0")
 
     return param_options
 

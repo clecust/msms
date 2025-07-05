@@ -13,7 +13,11 @@ def get_forces(path,label="forces", index=":"):
     atoms = read(path, format="extxyz", index=index)
     if not isinstance(atoms, list):
         atoms = [atoms]
-    forces = [atom.arrays[label] for atom in atoms]
+    try:
+        forces = [atom.arrays[label] for atom in atoms]
+    except:
+        forces = [atom._calc.results[label] for atom in atoms]
+
     forces = np.array(forces).reshape(-1, 1)
     return forces
 
@@ -27,11 +31,34 @@ if __name__ == "__main__":
     # path = "/home/giga/code/msms/run/checkpoints/msmace_r4_debug_run-1.model-mliap_lammps.pt_lmp_out.xyz"
     # path2 = "/home/giga/code/msms/run/checkpoints/msmace_r4_debug_run-1.model-mliap_lammps.pt_lmp.xyz"
 
-    ## msmacecso
-    path = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt_lmp_out.xyz"
-    path2 = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt_lmp.xyz"
-    forces = get_forces(path, label="MACE_forces", index=":")
-    forces2 = get_forces(path2, label="REF_forces", index=":")
+    # ## msmacecso
+    # path = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt_lmp_out.xyz"
+    # path2 = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-mliap_lammps.pt_lmp.xyz"
+
+    # path = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-lammps.pt_lmp_out.xyz"
+    # path2 = "/home/giga/code/msms/run/checkpoints/msmacecso_r10_debug_run-1.model-lammps.pt_lmp.xyz"
+
+    # path = "/home/giga/BIG/al/work_rigid_th3090_c6238_v11_opt/data/AL_20_w100_pbe_ot_d3bj_0ref.xyz"
+    # path2 = (
+    #     "/home/giga/code/Draft/al_inter_forces/all/AL_20_w100_pbe_ot_d3bj_0/labeled.xyz"
+    # )
+
+    # path = "/home/giga/code/msms/run/checkpoints/msmacecsor_r10_debug_run-1.model-lammps.pt_lmp_out.xyz"
+    # path2 = "/home/giga/code/msms/run/checkpoints/msmacecsor_r10_debug_run-1.model-lammps.pt_lmp.xyz"
+
+    # path = "/home/giga/code/msms/run/checkpoints/msmacecsor_water_run-1.model-mliap_lammps.pt_lmp_out.xyz"
+    # path2 = "/home/giga/code/msms/run/checkpoints/msmacecsor_water_run-1.model-mliap_lammps.pt_lmp.xyz"
+    # # # ### mace libtorch
+    # # path = "/home/giga/code/msms/run/checkpoints/msmacecsor_water_run-1.model-lammps.pt_lmp_out.xyz"
+    # # path2 = "/home/giga/code/msms/run/checkpoints/msmacecsor_water_run-1.model-lammps.pt_lmp.xyz"
+    # forces = get_forces(path, label="MACE_forces", index=":")  # MACE_forces REF_forces
+    # forces2 = get_forces(path2, label="REF_forces", index=":")
+
+    # scan vol
+    path = "/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/Gen16DTS_PBED2/VScan_EMC_config05_1.xyz"
+    path2 = "/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/Gen16DTS_PBED2/VScan_EMC_config05_2.xyz"
+    forces = get_forces(path, label="MACE_1forces", index=":")  # MACE_forces REF_forces
+    forces2 = get_forces(path2, label="MACE_2forces", index=":")
 
     with plt.style.context(["science"]):
         fig, ax = plt.subplots(1, 1, figsize=(3.5, 3.0), dpi=250)

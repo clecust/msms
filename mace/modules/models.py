@@ -26,6 +26,7 @@ from .blocks import (
     RadialEmbeddingBlock,
     ScaleShiftBlock,
     RealAgnosticResidualInteractionBlockMS,
+    RealAgnosticResidualInteractionBlockMS_noL,
     RealAgnosticResidualInteractionBlockMSR,
 )
 from .utils import (
@@ -524,6 +525,8 @@ class ScaleShiftMSMACE(torch.nn.Module):
         heads: Optional[List[str]] = None,
         cueq_config: Optional[Dict[str, Any]] = None,
         lammps_mliap: Optional[bool] = False,
+        first_noL: Optional[bool] = False,
+        ep_features_num: Optional[int] = None,
     ):
         super().__init__()
         self.register_buffer(
@@ -542,6 +545,8 @@ class ScaleShiftMSMACE(torch.nn.Module):
         if isinstance(correlation, int):
             correlation = [correlation] * num_interactions
         self.lammps_mliap = lammps_mliap
+        self.first_noL = first_noL
+        self.ep_features_num = ep_features_num
         # Embedding
         node_attr_irreps = o3.Irreps([(num_elements, (0, 1))])
         node_feats_irreps = o3.Irreps([(hidden_irreps.count(o3.Irrep(0, 1)), (0, 1))])
@@ -564,7 +569,10 @@ class ScaleShiftMSMACE(torch.nn.Module):
 
         sh_irreps = o3.Irreps.spherical_harmonics(max_ell)
         num_features = hidden_irreps.count(o3.Irrep(0, 1))
-        interaction_irreps = (sh_irreps * num_features).sort()[0].simplify()
+        if ep_features_num is not None:
+            interaction_irreps = (sh_irreps * self.ep_features_num).sort()[0].simplify()
+        else:
+            interaction_irreps = (sh_irreps * num_features).sort()[0].simplify()
         self.spherical_harmonics = o3.SphericalHarmonics(
             sh_irreps, normalize=True, normalization="component"
         )
@@ -589,21 +597,38 @@ class ScaleShiftMSMACE(torch.nn.Module):
         # Interactions and readout
         self.atomic_energies_fn = AtomicEnergiesBlock(atomic_energies)
 
-        inter = RealAgnosticResidualInteractionBlockMS(
-            node_attrs_irreps=node_attr_irreps,
-            node_feats_irreps=node_feats_irreps,
-            edge_attrs_irreps=sh_irreps,
-            edge_feats_irreps=edge_feats_irreps,
-            target_irreps=interaction_irreps,
-            hidden_irreps=hidden_irreps,
-            avg_num_neighbors=avg_num_neighbors,
-            radial_MLP=radial_MLP,
-            long_radial_MLP=long_radial_MLP,
-            long_node_feats_irreps=self.long_node_feats_irreps,
-            long_edge_feats_irreps=long_edge_feats_irreps,
-            long_edge_attrs_irreps=long_sh_irreps,
-            cueq_config=cueq_config,
-        )
+        if self.first_noL:
+            inter = RealAgnosticResidualInteractionBlockMS_noL(
+                node_attrs_irreps=node_attr_irreps,
+                node_feats_irreps=node_feats_irreps,
+                edge_attrs_irreps=sh_irreps,
+                edge_feats_irreps=edge_feats_irreps,
+                target_irreps=interaction_irreps,
+                hidden_irreps=hidden_irreps,
+                avg_num_neighbors=avg_num_neighbors,
+                radial_MLP=radial_MLP,
+                long_radial_MLP=long_radial_MLP,
+                long_node_feats_irreps=self.long_node_feats_irreps,
+                long_edge_feats_irreps=long_edge_feats_irreps,
+                long_edge_attrs_irreps=long_sh_irreps,
+                cueq_config=cueq_config,
+            ) # 
+        else:
+            inter = RealAgnosticResidualInteractionBlockMS(
+                node_attrs_irreps=node_attr_irreps,
+                node_feats_irreps=node_feats_irreps,
+                edge_attrs_irreps=sh_irreps,
+                edge_feats_irreps=edge_feats_irreps,
+                target_irreps=interaction_irreps,
+                hidden_irreps=hidden_irreps,
+                avg_num_neighbors=avg_num_neighbors,
+                radial_MLP=radial_MLP,
+                long_radial_MLP=long_radial_MLP,
+                long_node_feats_irreps=self.long_node_feats_irreps,
+                long_edge_feats_irreps=long_edge_feats_irreps,
+                long_edge_attrs_irreps=long_sh_irreps,
+                cueq_config=cueq_config,
+            )  
         self.interactions = torch.nn.ModuleList([inter])
 
         # Use the appropriate self connection at the first layer for proper E0

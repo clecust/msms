@@ -39,7 +39,9 @@ def old2new_ref(atoms_list):
 
 
 if __name__ == "__main__":
-    paths = [r"/home/giga/BIG/al/param_rigid_3090_c6238_v14_pbe_vis/data/AL_23.xyz"]
+    paths = [
+        r"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_config03.xyz"
+    ]
     path_lists = []
     for path in paths:
         if "*" in path:
