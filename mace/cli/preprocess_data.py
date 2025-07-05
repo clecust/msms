@@ -223,9 +223,14 @@ def run(args: argparse.Namespace):
 
     if args.compute_statistics:
         logging.info("Computing statistics")
-        if len(atomic_energies_dict) == 0:
+        is_get_atomic_energies = True
+        if atomic_energies_dict is not None  :        
+            if len(atomic_energies_dict) > 0 :
+                is_get_atomic_energies = False
+        if is_get_atomic_energies:
             atomic_energies_dict = get_atomic_energies(args.E0s, collections.train, z_table)
-
+        # if len(atomic_energies_dict) == 0:
+        #     atomic_energies_dict = get_atomic_energies(args.E0s, collections.train, z_table)
         # Remove atomic energies if element not in z_table
         removed_atomic_energies = {}
         for z in list(atomic_energies_dict):
