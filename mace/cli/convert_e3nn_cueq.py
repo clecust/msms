@@ -155,7 +155,7 @@ def transfer_weights(
                     f"source {source_dict[key].shape} vs target {target_dict[key].shape}"
                 )
     # Transfer avg_num_neighbors
-    for i in range(2):
+    for i in range(num_layers):
         target_model.interactions[i].avg_num_neighbors = source_model.interactions[
             i
         ].avg_num_neighbors
