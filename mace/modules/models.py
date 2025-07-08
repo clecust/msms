@@ -1265,7 +1265,12 @@ class ScaleShiftMACECSO(MACE):
         self.scale_shift = ScaleShiftBlock(
             scale=atomic_inter_scale, shift=atomic_inter_shift
         )
-        self.dispersion_correction = dftd.D3CSO_Calculator_edge_forces(
+        # self.dispersion_correction = dftd.D3CSO_Calculator_edge_forces(
+        #     xc=xc,
+        #     cutoff=r_max,
+        #     bidirectional=True,
+        # )
+        self.dispersion_correction = dftd.D3CSO_Calculator(
             xc=xc,
             cutoff=r_max,
             bidirectional=True,
@@ -1376,9 +1381,15 @@ class ScaleShiftMACECSO(MACE):
         node_feats_out = torch.cat(node_feats_list, dim=-1)
         node_inter_es = torch.sum(torch.stack(node_es_list, dim=0), dim=0)
         ######  dispersion_correction
-        node_disp, edge_disp_f = self.dispersion_correction(
-            vectors.detach() if is_lammps else vectors,  #
-            lengths.detach() if is_lammps else lengths,
+        # node_disp, edge_disp_f = self.dispersion_correction(
+        #     vectors.detach() if is_lammps else vectors,  #
+        #     lengths.detach() if is_lammps else lengths,
+        #     data["edge_index"],
+        #     self.atomic_numbers[torch.argmax(data["node_attrs"], dim=1)],
+        # )
+        node_disp = self.dispersion_correction(
+            vectors,  #
+            lengths,
             data["edge_index"],
             self.atomic_numbers[torch.argmax(data["node_attrs"], dim=1)],
         )
@@ -1403,9 +1414,9 @@ class ScaleShiftMACECSO(MACE):
             compute_hessian=compute_hessian,
             compute_edge_forces=compute_edge_forces or compute_atomic_stresses,
         )
-        if edge_forces is not None:
-            ### jiust in mliap # Match LAMMPS sign convention
-            edge_forces -= edge_disp_f
+        # if edge_forces is not None:
+        #     ### jiust in mliap # Match LAMMPS sign convention;
+        #     edge_forces += edge_disp_f
         atomic_virials: Optional[torch.Tensor] = None
         atomic_stresses: Optional[torch.Tensor] = None
         if compute_atomic_stresses and edge_forces is not None:
