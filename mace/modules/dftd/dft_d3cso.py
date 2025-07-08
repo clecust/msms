@@ -79,6 +79,8 @@ class D3CSO_Calculator_edge_forces(nn.Module):
                 a1 = 0.82
                 s6 = 0.85
                 a4 = 4.5
+            elif xc == "ZERO":
+                a1 = -0.73
             else:
                 raise ValueError(f"[ERROR] Unexpected value xc={xc}")
         self.register_buffer("a1", torch.tensor([a1], dtype=torch.get_default_dtype()))
@@ -163,8 +165,24 @@ class D3CSO_Calculator_edge_forces(nn.Module):
         # virial为负值，能与自动微分的对上
         return (
             node_g.squeeze(-1) * self.d3_autoev,
-            force_contribution * self.d3_autoev / self.d3_autoang,
+            -2.0*force_contribution * self.d3_autoev / self.d3_autoang,
         )  # node, edge_forces
+
+    def __repr__(self):
+        # 调用父类的__repr__方法作为基础
+        base_repr = super().__repr__()
+        # 提取类名部分
+        class_name = base_repr.split("(")[0]
+        # 添加自定义参数信息
+        params = [
+            f"a1={self.a1.item():.4f}",
+            f"a2={self.a2.item():.4f}",
+            f"a4={self.a4.item():.4f}",
+            f"s6={self.s6.item():.4f}",
+            f"cutoff={self.cutoff:.4f} bohr",
+        ]
+        # 组合成新的字符串表示
+        return f"{class_name}({', '.join(params)})"
 
 
 @compile_mode("script")
@@ -228,6 +246,8 @@ class D3CSO_Calculator_f(nn.Module):
             a1 = 0.82
             s6 = 0.85
             a4 = 4.5
+        elif xc == "ZERO":
+            a1 = -0.73
         else:
             raise ValueError(f"[ERROR] Unexpected value xc={xc}")
         self.register_buffer("a1", torch.tensor([a1], dtype=torch.get_default_dtype()))
@@ -384,13 +404,17 @@ class D3CSO_Calculator(nn.Module):
             a1 = 0.82
             s6 = 0.85
             a4 = 4.5
+        elif xc == "ZERO":
+            a1 = -0.73
         else:
             raise ValueError(f"[ERROR] Unexpected value xc={xc}")
         self.register_buffer("a1", torch.tensor([a1], dtype=torch.get_default_dtype()))
         self.register_buffer("a2", torch.tensor([a2], dtype=torch.get_default_dtype()))
         self.register_buffer("a4", torch.tensor([a4], dtype=torch.get_default_dtype()))
         self.register_buffer("s6", torch.tensor([s6], dtype=torch.get_default_dtype()))
-
+        self.prefix = torch.nn.Parameter(
+            torch.tensor([s6], dtype=torch.get_default_dtype())
+        )
     def forward(
         self,
         dij: torch.Tensor,  # vec
@@ -428,11 +452,28 @@ class D3CSO_Calculator(nn.Module):
 
         # 聚合节点能量
         node_g = e6.new_zeros((Z.shape[0], 1))
-        node_g.index_add_(0, row, e6)
+        node_g.index_add_(0, col, e6)
         if not self.bidirectional:
             # 单向图
             node_g *= 2.0
         return node_g.squeeze(-1) * self.d3_autoev
+
+    def __repr__(self):
+        # 调用父类的__repr__方法作为基础
+        base_repr = super().__repr__()
+        # 提取类名部分
+        class_name = base_repr.split("(")[0]
+        # 添加自定义参数信息
+        params = [
+            f"a1={self.a1.item():.4f}",
+            f"a2={self.a2.item():.4f}",
+            f"a4={self.a4.item():.4f}",
+            f"s6={self.s6.item():.4f}",
+            f"cutoff={self.cutoff:.4f} bohr",
+            f"prefix={self.prefix.item():.4f}",
+        ]
+        # 组合成新的字符串表示
+        return f"{class_name}({', '.join(params)})"
 
 
 if __name__ == "__main__":
@@ -447,7 +488,7 @@ if __name__ == "__main__":
     TYPE = "OO"  # 6
     Z = torch.tensor([8, 8], dtype=torch.long)
     label1 = ["bj", "b3-lyp"]  # b-lyp
-    dftd2 = D3CSO_Calculator_f(cutoff=10.0, xc="B3LYP")
+    dftd2 = D3CSO_Calculator_edge_forces(cutoff=10.0, xc="B3LYP")
     # dftd2 = D3CSO_Calculator(cutoff=10.0, xc="B3LYP")
 
     # 初始距离（埃）
@@ -484,7 +525,7 @@ if __name__ == "__main__":
         vec = pos[edge_index[1]] - pos[edge_index[0]]
         rs = torch.linalg.norm(vec, dim=-1, keepdim=True)
         # E_disp = dftd2(rs, edge_index, Z, batch)
-        E_disp, f, virial = dftd2(vec, rs, edge_index, Z, batch, compute_virials=True)
+        E_disp, f  = dftd2(vec, rs, edge_index, Z, batch)
         # f = torch.autograd.grad(
         #     outputs=[-E_disp],  # [n_graphs, ]
         #     inputs=[pos],  # [n_nodes, 3]
