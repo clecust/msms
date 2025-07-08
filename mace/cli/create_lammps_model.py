@@ -11,7 +11,7 @@ from e3nn.util import jit
 from mace.calculators import LAMMPS_MACE
 from mace.calculators.lammps_mliap_mace import LAMMPS_MLIAP_MACE
 from mace.cli.convert_e3nn_cueq import run as run_e3nn_to_cueq
-
+from mace.cli.convert_e3nn_cueq import mace2macecso
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -37,10 +37,28 @@ def parse_args():
         default="float64",
     )
     parser.add_argument(
+        "--cso_a1",
+        type=float,
+        help=" cso_a1 ",
+        default=None,
+    )
+    parser.add_argument(
+        "--cso_r",
+        type=float,
+        help=" cso_r ",
+        default=None,
+    )
+    parser.add_argument(
         "--format",
         type=str,
         help="Old libtorch format, or new mliap format",
         default="libtorch",
+    )
+    parser.add_argument(
+        "--mace2macecso",
+        help="mace2macecso",
+        action="store_true",
+        default=False,
     )
     return parser.parse_args()
 
@@ -87,11 +105,25 @@ def main():
         model_path,
         map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     )
+    if args.cso_r is not None:
+        model = mace2macecso(copy.deepcopy(model))
+
     if has_dftd_submodule(model, "dispersion_correction"):
-        try:
-            print(f"model.dispersion_correction.prefix={model.dispersion_correction.prefix}")
-        except:
-            print("has dispersion_correction, but no prefix")
+        print(
+            f"model.dispersion_correction.prefix={model.dispersion_correction.prefix},with a1 = {model.dispersion_correction.a1} "
+        )
+        if args.cso_a1 is not None:
+            model.dispersion_correction.a1 = torch.ones_like(model.dispersion_correction.a1) * args.cso_a1
+            print(f"Change a1 to  {model.dispersion_correction.a1} ")
+
+        # print(model)
+        if args.cso_r is not None:
+            model.r_max = torch.ones_like(model.r_max) * float(args.cso_r)
+            model.dispersion_correction.cutoff = (
+                float(args.cso_r) / model.dispersion_correction.d3_autoang
+            )
+        print(model)
+
     if args.dtype == "float64":
         model = model.double().to("cpu")
     elif args.dtype == "float32":
@@ -116,7 +148,17 @@ def main():
         lammps_class(model, head=head) if head is not None else lammps_class(model)
     )
     if args.format == "mliap":
-        torch.save(lammps_model, model_path + "-mliap_lammps.pt")
+        label_info = ''
+        if args.cso_a1 is not None:
+            label_info = f"-a1={str(args.cso_a1).replace('.','_')}"
+        if args.cso_r is not None:
+            label_info += f"-csor={str(args.cso_r).replace('.','_')}"
+
+        model_path = f"{model_path.replace('.model',f'{label_info}')}" + ".model"
+        torch.save(
+            lammps_model,
+            model_path + "-mliap_lammps.pt",
+        )
     else:
         lammps_model_compiled = jit.compile(lammps_model)
         lammps_model_compiled.save(model_path + "-lammps.pt")

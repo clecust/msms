@@ -164,6 +164,57 @@ def transfer_weights(
     target_model.load_state_dict(target_dict)
 
 
+def mace2macecso(
+    input_model,
+    output_model="_cso.model",
+    device="cpu",
+    return_model=True,    
+):
+    from mace import modules
+
+    # Setup logging
+
+    # Load original model
+    # logging.warning(f"Loading model")
+    # check if input_model is a path or a model
+    if isinstance(input_model, str):
+        source_model = torch.load(input_model, map_location=device)
+    else:
+        source_model = input_model
+    default_dtype = next(source_model.parameters()).dtype
+    torch.set_default_dtype(default_dtype)
+    # Extract configuration
+    config = extract_config_mace_model(source_model)
+    # Get max_L and correlation from config
+    config["r_min"] = config["r_max"]
+
+    # Create new model with cuequivariance config
+    logging.info("Creating mace model to macecso")
+    # target_model = source_model.__class__(**config).to(device)
+    target_model = modules.ScaleShiftMACECSO(**config).to(device)
+    result = target_model.load_state_dict(source_model.state_dict(), strict=False)
+    # 打印未成功加载的参数
+    if result.missing_keys:
+        print("以下参数在源模型中不存在，但目标模型需要：")
+        for key in result.missing_keys:
+            print(f"  - {key}")
+
+    if result.unexpected_keys:
+        print("以下参数在源模型中存在，但目标模型不需要：")
+        for key in result.unexpected_keys:
+            print(f"  - {key}")
+
+    if return_model:
+        return target_model
+
+    if isinstance(input_model, str):
+        base = os.path.splitext(input_model)[0]
+        output_model = f"{base}.{output_model}"
+    logging.warning(f"Saving mace model to macecso={output_model}")
+    torch.save(target_model, output_model)
+    return None
+
+
 def run(
     input_model,
     output_model="_cueq.model",
@@ -196,7 +247,7 @@ def run(
         model_info = "macecso"
         config = extract_config_macecso_model(source_model)
     else:
-        model_info = 'mace'
+        model_info = "mace"
         config = extract_config_mace_model(source_model)
     # Get max_L and correlation from config
     max_L = config["hidden_irreps"].lmax
