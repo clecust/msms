@@ -3,44 +3,91 @@ import glob,re
 from ase.io import read, write
 
 
-def old2new_ref(atoms_list):
+def old2new_ref(
+    atoms_list,
+    prefix="REF_",
+    energy_key="energy",
+    forces_key="forces",
+    stress_key="stress",
+    kcal_to_ev=False,
+):
+    """
+    Convert and store reference energy/force/stress/virial into atoms.info and atoms.arrays.
+
+    Parameters:
+    - atoms_list: List[ase.Atoms] or ase.Atoms
+    - prefix: Prefix for new keys in atoms.info and atoms.arrays
+    - energy_key: key to access potential energy (default 'energy')
+    - forces_key: key to access forces (default 'forces')
+    - stress_key: key to access stress (default 'stress')
+    - kcal_to_ev: if True, convert energy/force from kcal/mol to eV
+    """
+    if not isinstance(atoms_list, list):
+        atoms_list = [atoms_list]
+    print(f"len=({len(atoms_list)})")
+
+    factor = 0.0433641 if kcal_to_ev else 1.0
+
     for atoms in atoms_list:
+        # --- forces ---
+        forces = None
         try:
-            atoms.arrays["REF_forces"] = atoms.get_forces()
-        except Exception as e:  # pylint: disable=W0703
-            pass
+            forces = atoms.get_forces()
+        except Exception:
+            forces = atoms._calc.results.get(forces_key, None)
+        if forces is None:
+            forces = atoms.info.get(forces_key, None)
+        atoms.arrays[f"{prefix}forces"] = forces * factor if forces is not None else None
+
+        # --- energy ---
+        energy = None
         try:
-            atoms.info["REF_energy"] = atoms.get_potential_energy()
-        except Exception as e:  # pylint: disable=W0703
-            pass
+            energy = atoms.get_potential_energy()
+        except Exception:
+            energy = atoms._calc.results.get(energy_key, None)
+        if energy is None:
+            energy = atoms.info.get(energy_key, None)
+        atoms.info[f"{prefix}energy"] = energy * factor if energy is not None else None
+
+        # --- stress ---
+        stress = None
         try:
-            atoms.info["REF_stress"] = atoms.get_stress()
-        except Exception as e:  # pylint: disable=W0703
-            pass
+            stress = atoms.get_stress()
+        except Exception:
+            stress = atoms._calc.results.get(stress_key, None)
+        if stress is None:
+            stress = atoms.info.get(stress_key, None)
+        if stress is not None:
+            atoms.info[f"{prefix}stress"] = stress
+
+        # --- virials → stress ---
         try:
-            if 'virial' in atoms.info :
-                atoms.info["REF_virials"] = atoms.info['virial']
+            if "virial" in atoms.info:
+                atoms.info[f"{prefix}virials"] = atoms.info["virial"]
                 del atoms.info["virial"]
-            elif "REF_virial" in atoms.info:
-                atoms.info["REF_virials"] = atoms.info["REF_virial"]
-                del atoms.info["REF_virial"]
-        except Exception as e:  # pylint: disable=W0703
+            elif f"{prefix}virial" in atoms.info:
+                atoms.info[f"{prefix}virials"] = atoms.info[f"{prefix}virial"]
+                del atoms.info[f"{prefix}virial"]
+        except Exception:
             pass
+
         try:
-            #  ASE 默认定义为压缩为正，而有些软件（如 DFTB和LAMMPS,cp2k）是张力为正。
-            atoms.info["REF_stress"] = -atoms.info["REF_virials"] / atoms.get_volume()
-        except Exception as e:  # pylint: disable=W0703
+            if f"{prefix}virials" in atoms.info:
+                atoms.info[f"{prefix}stress"] = -atoms.info[f"{prefix}virials"] / atoms.get_volume()
+        except Exception:
             pass
-        if 'config_weight' in atoms.info:
-            if atoms.info['config_weight'] == 50.0:
-                atoms.info['config_weight'] = 1.01
+
+        if atoms.info.get("config_weight") == 50.0:
+            atoms.info["config_weight"] = 1.01
+
         atoms.calc = None
+
     return atoms_list
 
 
 if __name__ == "__main__":
     paths = [
-        r"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_config03.xyz"
+        r"/home/giga/BIG/data/md22/zip/*.xyz"
     ]
     path_lists = []
     for path in paths:
@@ -55,7 +102,9 @@ if __name__ == "__main__":
     for pls in path_lists:
         print(pls)
         atoms_list = read(pls, format="extxyz", index=":")
-        atoms_list = old2new_ref(atoms_list)
+        atoms_list = old2new_ref(atoms_list,
+                                 energy_key="Energy",
+                                 kcal_to_ev=True)
 
         save_pls = pls.replace('.xyz',"w101.xyz")
         print(f"save to {save_pls}")
