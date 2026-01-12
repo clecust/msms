@@ -14,6 +14,29 @@ except:
 
 
 @compile_mode("script")
+class Poly_Smoothing(torch.nn.Module):
+    def __init__(self, cutoff: float = 10.0, delta: float = 1.0):
+        super().__init__()
+        self.cutoff = float(cutoff)
+        self.delta = float(delta)
+        self.cuton = self.cutoff - self.delta
+        self.inv_delta = 1.0 / self.delta
+
+    def forward(self, r):
+        # x in [0,1] handles:
+        # r <= cuton  -> x=0 -> S=1
+        # r >= cutoff -> x=1 -> S=0
+        x = (r - self.cuton) * self.inv_delta
+        x = torch.clamp(x, 0.0, 1.0)
+
+        # S(x) = 1 - 6x^5 + 15x^4 - 10x^3
+        # = 1 + x^3 * ( (-6x + 15)*x - 10 )
+        x2 = x * x
+        x3 = x2 * x
+        return 1.0 + x3 * (((-6.0 * x + 15.0) * x) - 10.0)
+
+
+@compile_mode("script")
 class D3CSO_Calculator_edge_forces(nn.Module):
     def __init__(
         self,
@@ -352,6 +375,8 @@ class D3CSO_Calculator(nn.Module):
         device: float = "cpu",
         xc: str = "PBE",
         bidirectional: bool = True,
+        cutoff_scheme: str = "shift",  # "none" | "shift" | "smooth"
+        smooth_delta: float = 1.0,  # Angstrom, 仅 smooth 用
     ):
         super().__init__()
         self.register_buffer(
@@ -379,6 +404,20 @@ class D3CSO_Calculator(nn.Module):
         self.d3_autoang = 0.52917726  # for converting distance from bohr to angstrom
         self.d3_autoev = 27.21138505  # for converting a.u. to eV
         self.cutoff = cutoff / self.d3_autoang
+
+        # scheme 编码（TorchScript更友好：int分支）
+        scheme = cutoff_scheme.lower()
+        if scheme == "none":
+            self.cutoff_scheme = 0
+        elif scheme == "shift":
+            self.cutoff_scheme = 1
+        elif scheme == "smooth":
+            self.cutoff_scheme = 2
+            self.smooth_delta = float(smooth_delta) / self.d3_autoang
+            self.cuton = self.cutoff - self.smooth_delta
+            self.inv_smooth_delta = 1.0 / self.smooth_delta
+        else:
+            raise ValueError(f"[ERROR] Unexpected cutoff_scheme={cutoff_scheme}")
 
         s6 = 0.73
         a2 = 2.5
@@ -419,6 +458,23 @@ class D3CSO_Calculator(nn.Module):
             "coefficient", torch.tensor([1.0], dtype=torch.get_default_dtype())
         )
 
+    def _poly_switch_quintic(self, r_bohr: torch.Tensor) -> torch.Tensor:
+        """
+        Quintic smoothstep switching:
+          r <= cuton  -> 1
+          r >= cutoff -> 0
+        采用 clamp 避免 where，更快。
+        """
+        # x in [0,1]
+        x = (r_bohr - self.cuton) * self.inv_smooth_delta
+        x = torch.clamp(x, 0.0, 1.0)
+
+        # S(x) = 1 - 6x^5 + 15x^4 - 10x^3
+        #      = 1 + x^3 * (((-6x + 15)*x) - 10)
+        x2 = x * x
+        x3 = x2 * x
+        return 1.0 + x3 * (((-6.0 * x + 15.0) * x) - 10.0)
+
     def forward(
         self,
         dij: torch.Tensor,  # vec
@@ -446,13 +502,20 @@ class D3CSO_Calculator(nn.Module):
             / (rij**6 + self.a4**6)
             * (self.s6 + a1 / (1.0 + torch.exp(rij - self.a2 * r0ij)))
         )
-        # # 应用截断函数
-        if self.cutoff is not None:
+        # ---- 截断策略 ----
+        if self.cutoff_scheme == 0:
+            e6 = edisp
+
+        elif self.cutoff_scheme == 1:
+            # 水平平移（shift）：让 V(r=cutoff) ~ 0
             ### 采用bamboo框架使用的, 水平平移
             edisp += self.s6 * c6ij / (self.cutoff**6 + self.a4**6)
             e6 = edisp
         else:
-            e6 = edisp
+            # 平滑截断：C2（端点处一阶二阶导连续），力更“干净”
+            # 前提：smooth_delta > 0 且 cuton = cutoff - delta
+            s = self._poly_switch_quintic(rij)
+            e6 = edisp * s
 
         # 聚合节点能量
         node_g = e6.new_zeros((Z.shape[0], 1))
@@ -490,12 +553,14 @@ if __name__ == "__main__":
     # test
     # TYPE = "KrKr" # 36
     # TYPE = "HeHe"  #2
-    TYPE = "OO"  # 6
-    Z = torch.tensor([8, 8], dtype=torch.long)
+    TYPE = "CC"  # 6
+    Z = torch.tensor([6, 6], dtype=torch.long)
     label1 = ["zero", "b3-lyp",True]  # b-lyp
     # dftd2 = D3CSO_Calculator_edge_forces(cutoff=10.0, xc="B3LYP")
-    dftd2 = D3CSO_Calculator(cutoff=10.0, xc="zero")
-    dftd2.a1 = torch.ones_like(dftd2.a1) * (-0.67)
+    dftd2 = D3CSO_Calculator(
+        cutoff=10.0, xc="zero", cutoff_scheme="smooth"
+    )  #  # "none" | "shift" | "smooth"
+    dftd2.a1 = torch.ones_like(dftd2.a1) * (0.75)
     # dftd2.c6_emb.weight *= -0.01
     # dftd2.coefficient = torch.ones_like(dftd2.coefficient) * (-0.3)
 
@@ -552,7 +617,7 @@ if __name__ == "__main__":
         )[0]
         energy2.append(E_disp.sum().item())
         forces2.append(f.detach().cpu().numpy())
-        # E_disp = dftd3(vec, rs, edge_index, Z) 
+        # E_disp = dftd3(vec, rs, edge_index, Z)
         # # E_disp, f  = dftd2(vec, rs, edge_index, Z, batch)
         # f = torch.autograd.grad(
         #     outputs=[-E_disp],  # [n_graphs, ]
