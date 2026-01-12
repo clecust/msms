@@ -37,15 +37,27 @@ def parse_args():
         default="float64",
     )
     parser.add_argument(
-        "--cso_a1",
+        "--coefficient",
         type=float,
-        help=" cso_a1 ",
+        help=" coefficient ",
         default=None,
     )
     parser.add_argument(
         "--cso_r",
         type=float,
         help=" cso_r ",
+        default=None,
+    )
+    parser.add_argument(
+        "--c6",
+        type=float,
+        help=" c6 ",
+        default=None,
+    )
+    parser.add_argument(
+        "--a1",
+        type=float,
+        help=" a1 ",
         default=None,
     )
     parser.add_argument(
@@ -106,24 +118,43 @@ def main():
         map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     )
     if args.cso_r is not None:
+        ## 不能转化jit的，checkpoint可以转化
         model = mace2macecso(copy.deepcopy(model))
+        print(f"to macecso")
 
     if has_dftd_submodule(model, "dispersion_correction"):
         print(
-            f"model.dispersion_correction.prefix={model.dispersion_correction.prefix},with a1 = {model.dispersion_correction.a1} "
+            f"model.dispersion_correction.coefficient={model.dispersion_correction.coefficient},with a1 = {model.dispersion_correction.a1} "
         )
-        if args.cso_a1 is not None:
-            model.dispersion_correction.a1 = torch.ones_like(model.dispersion_correction.a1) * args.cso_a1
-            print(f"Change a1 to  {model.dispersion_correction.a1} ")
+        if args.coefficient is not None:
+            model.dispersion_correction.coefficient = (
+                torch.ones_like(model.dispersion_correction.coefficient)
+                * args.coefficient
+            )
+            print(f"Change coefficient to  {model.dispersion_correction.coefficient} ")
 
         # print(model)
         if args.cso_r is not None:
             model.r_max = torch.ones_like(model.r_max) * float(args.cso_r)
+
             model.dispersion_correction.cutoff = (
                 float(args.cso_r) / model.dispersion_correction.d3_autoang
             )
-        print(model)
+        # print(model)
 
+        if args.c6 is not None:
+            model.dispersion_correction.c6_emb.weight[8] *= float(args.c6)
+            print(
+                f"Change to model.dispersion_correction.c6_emb.weight[8]={model.dispersion_correction.c6_emb.weight[8]}, by {args.c6}"
+            )
+        if args.a1 is not None:
+            print(f"model.dispersion_correction.a1={model.dispersion_correction.a1}")
+            model.dispersion_correction.a1 = (
+                torch.ones_like(model.dispersion_correction.a1) * args.a1
+            )
+            print(
+                f"Change to model.dispersion_correction.a1={model.dispersion_correction.a1}, by {args.a1}"
+            )
     if args.dtype == "float64":
         model = model.double().to("cpu")
     elif args.dtype == "float32":
@@ -149,16 +180,25 @@ def main():
     )
     if args.format == "mliap":
         label_info = ''
-        if args.cso_a1 is not None:
-            label_info = f"-a1={str(args.cso_a1).replace('.','_')}"
+        if args.coefficient is not None:
+            label_info = f"-coef={str(args.coefficient).replace('.','_')}"
         if args.cso_r is not None:
             label_info += f"-csor={str(args.cso_r).replace('.','_')}"
-
+        if args.c6 is not None:
+            label_info += f"-c6={str(args.c6).replace('.','_')}"
+        if args.a1 is not None:
+            label_info += f"-a1={str(args.a1).replace('.','_')}"
         model_path = f"{model_path.replace('.model',f'{label_info}')}" + ".model"
+        # _negativecso
         torch.save(
             lammps_model,
             model_path + "-mliap_lammps.pt",
         )
+        if label_info !=  '':
+            torch.save(
+                model,
+                model_path,
+            )
     else:
         lammps_model_compiled = jit.compile(lammps_model)
         lammps_model_compiled.save(model_path + "-lammps.pt")

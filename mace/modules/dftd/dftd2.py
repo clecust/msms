@@ -112,9 +112,9 @@ class DFTD2_Calc(torch.nn.Module):
             raise ValueError(
                 f"Only zero-damping can be used with the D2 dispersion correction method!"
             )
-        c6ab = self.c6ab * (1.0 + 0.5 * (self.act(self.prefix_c6ab)))
+        c6ab = self.c6ab #  * (1.0 + 0.5 * (self.act(self.prefix_c6ab)))
         c6 = c6ab[Zi, Zj].unsqueeze(-1)  # (n_edges,)
-        factors = 1.0 + 0.5 * self.act(self.prefix_6)
+        factors = 1.0  + 0.5 * self.act(self.prefix_6)
         alp6 = self.alp6 * factors[0] 
         s6 = self.s6 * factors[1]
         rs6 = self.rs6 * factors[2]  

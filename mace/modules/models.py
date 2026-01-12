@@ -1448,7 +1448,7 @@ class ScaleShiftMACECSO(MACE):
 class ScaleShiftMSMACECSO(torch.nn.Module):
     # libtorch-mace-lammps的接口没有问题；　但是基于向量求导的mliap-lammps接口出现问题！！
     # 采用解析解的方式，太复杂，而且难以平衡mace-lammps和mliap-lammps的接口，另外还有Pytroch训练的接口
-    # libtorch-mace: 采用自动微分的方法；　而mliap-lammps采用解析解（edge_forces为负梯度）,且返回的色散能量是没有vec和length的梯度关联的(两个都要取消！！有一个都不行)；　实现两个接口以及pytroch的统一
+    # libtorch-mace: 采用自动微分的方法；　而mliap-lammps采用解析解（edge_forces为负梯度）` `````````````````,且返回的色散能量是没有vec和length的梯度关联的(两个都要取消！！有一个都不行)；　实现两个接口以及pytroch的统一
     def __init__(
         self,
         r_max: float,
