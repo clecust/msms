@@ -375,7 +375,7 @@ class D3CSO_Calculator(nn.Module):
         device: float = "cpu",
         xc: str = "PBE",
         bidirectional: bool = True,
-        cutoff_scheme: str = "shift",  # "none" | "shift" | "smooth"
+        cutoff_scheme: str = "smooth",  # "none" | "shift" | "smooth"
         smooth_delta: float = 1.0,  # Angstrom, 仅 smooth 用
     ):
         super().__init__()
@@ -404,6 +404,9 @@ class D3CSO_Calculator(nn.Module):
         self.d3_autoang = 0.52917726  # for converting distance from bohr to angstrom
         self.d3_autoev = 27.21138505  # for converting a.u. to eV
         self.cutoff = cutoff / self.d3_autoang
+        # pacefloder
+        self.cuton = 1.0 / self.d3_autoang
+        self.inv_smooth_delta = 1.0 / self.d3_autoang
 
         # scheme 编码（TorchScript更友好：int分支）
         scheme = cutoff_scheme.lower()
@@ -455,7 +458,7 @@ class D3CSO_Calculator(nn.Module):
         #     torch.tensor([1.0], dtype=torch.get_default_dtype())
         # )
         self.register_buffer(
-            "coefficient", torch.tensor([1.0], dtype=torch.get_default_dtype())
+            "coefficient", torch.tensor([0.0], dtype=torch.get_default_dtype())
         )
 
     def _poly_switch_quintic(self, r_bohr: torch.Tensor) -> torch.Tensor:
@@ -514,8 +517,9 @@ class D3CSO_Calculator(nn.Module):
         else:
             # 平滑截断：C2（端点处一阶二阶导连续），力更“干净”
             # 前提：smooth_delta > 0 且 cuton = cutoff - delta
-            s = self._poly_switch_quintic(rij)
-            e6 = edisp * s
+            # s = self._poly_switch_quintic(rij)
+            # e6 = edisp * s
+            e6 = edisp
 
         # 聚合节点能量
         node_g = e6.new_zeros((Z.shape[0], 1))
@@ -538,6 +542,7 @@ class D3CSO_Calculator(nn.Module):
             f"s6={self.s6.item():.4f}",
             f"cutoff={self.cutoff:.4f} bohr",
             f"coefficient={self.coefficient.item():.4f}",
+            f"cutoff_scheme={self.cutoff_scheme}",
             # f"negetive node_g"
         ]
         # 组合成新的字符串表示

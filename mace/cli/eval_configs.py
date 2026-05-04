@@ -10,7 +10,7 @@ import ase.data
 import ase.io
 import numpy as np
 import torch
-
+import tqdm
 from mace import data
 from mace.tools import torch_geometric, torch_tools, utils
 
@@ -102,13 +102,13 @@ def run(args: argparse.Namespace) -> None:
         heads = model.heads
     except AttributeError:
         heads = None
-
+        
     data_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(
                 config, z_table=z_table, cutoff=float(model.r_max), heads=heads
             )
-            for config in configs
+            for config in tqdm.tqdm(configs)
         ],
         batch_size=args.batch_size,
         shuffle=False,
@@ -122,7 +122,7 @@ def run(args: argparse.Namespace) -> None:
     forces_collection = []
     node_feats_list = []
 
-    for batch in data_loader:
+    for batch in tqdm.tqdm(data_loader):
         batch = batch.to(device)
         output = model(batch.to_dict(), compute_stress=args.compute_stress)
         energies_list.append(torch_tools.to_numpy(output["energy"]))

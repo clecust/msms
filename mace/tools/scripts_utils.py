@@ -1008,25 +1008,25 @@ def get_params_options(
         amsgrad=args.amsgrad,
         betas=(args.beta, 0.999),
     )
-    # 初始化prefix参数组（初始学习率为0）
-    if has_dftd_submodule(model, "dispersion_correction"):
-        prefix_param = model.dispersion_correction.prefix
-        prefix_param.requires_grad = True  # 确保梯度计算开启
-        prefix_params = [prefix_param]
-        # if   args.d3_train :  # and args.finetune:
-        #### 用于后续微调，只用开启 --d3_train 激活，注意其他伴随的（能量权重和初始学习率）
-        # logging.info(f"Only Training prefix parameter with initial lr={args.lr}")
-        #### --d3_train 激活训练，否则lr=0.0,不训练;
-        cso_lr = float(args.lr)*0.1
-        param_options["params"].append(
-            {
-                "name": "d3_prefix",
-                "params": prefix_params,
-                "weight_decay": 0.0,
-                "lr": cso_lr,  # 初始学习率为args.lr
-            }
-        )
-        logging.info(f"Append CSO.prefix parameter with initial lr={cso_lr}")
+    # # 初始化prefix参数组（初始学习率为0）
+    # if has_dftd_submodule(model, "dispersion_correction"):
+    #     prefix_param = model.dispersion_correction.prefix
+    #     prefix_param.requires_grad = True  # 确保梯度计算开启
+    #     prefix_params = [prefix_param]
+    #     # if   args.d3_train :  # and args.finetune:
+    #     #### 用于后续微调，只用开启 --d3_train 激活，注意其他伴随的（能量权重和初始学习率）
+    #     # logging.info(f"Only Training prefix parameter with initial lr={args.lr}")
+    #     #### --d3_train 激活训练，否则lr=0.0,不训练;
+    #     cso_lr = float(args.lr)*0.1
+    #     param_options["params"].append(
+    #         {
+    #             "name": "d3_prefix",
+    #             "params": prefix_params,
+    #             "weight_decay": 0.0,
+    #             "lr": cso_lr,  # 初始学习率为args.lr
+    #         }
+    #     )
+    #     logging.info(f"Append CSO.prefix parameter with initial lr={cso_lr}")
 
         # else:
         #     # 添加prefix参数组（初始lr=0）,用于初始训练，后续在epoch == rigid_probability_epoch时赋予非零的lr值

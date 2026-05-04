@@ -41,3 +41,5 @@ dist/
 run/*
 *.h5
 *.hdf5
+
+run*

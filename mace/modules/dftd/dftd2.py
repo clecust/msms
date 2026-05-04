@@ -21,31 +21,28 @@ d3_k2 = 4 / 3
 d3_k3 = -4.000
 d3_maxc = 5  # maximum number of coordination complexes
 
+
 @compile_mode("script")
 class Poly_Smoothing(torch.nn.Module):
-
-    def __init__(
-        self,
-        cutoff: float = 10.0,
-    ):
+    def __init__(self, cutoff: float = 10.0, delta: float = 1.0):
         super().__init__()
-        self.cutoff = cutoff
-    
-    def forward(
-        self,
-        r: Tensor,
-    ) -> Tensor:
-        cuton = self.cutoff - 1
-        x = (self.cutoff - r) / (self.cutoff - cuton)
-        x2 = x**2
+        self.cutoff = float(cutoff)
+        self.delta = float(delta)
+        self.cuton = self.cutoff - self.delta
+        self.inv_delta = 1.0 / self.delta
+
+    def forward(self, r):
+        # x in [0,1] handles:
+        # r <= cuton  -> x=0 -> S=1
+        # r >= cutoff -> x=1 -> S=0
+        x = (r - self.cuton) * self.inv_delta
+        x = torch.clamp(x, 0.0, 1.0)
+
+        # S(x) = 1 - 6x^5 + 15x^4 - 10x^3
+        # = 1 + x^3 * ( (-6x + 15)*x - 10 )
+        x2 = x * x
         x3 = x2 * x
-        x4 = x3 * x
-        x5 = x4 * x
-        return torch.where(
-            r <= cuton,
-            torch.ones_like(x),
-            torch.where(r >= self.cutoff, torch.zeros_like(x), 6 * x5 - 15 * x4 + 10 * x3),
-        )
+        return 1.0 + x3 * (((-6.0 * x + 15.0) * x) - 10.0)
 
 
 @compile_mode("script")

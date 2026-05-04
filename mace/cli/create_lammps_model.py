@@ -11,7 +11,7 @@ from e3nn.util import jit
 from mace.calculators import LAMMPS_MACE
 from mace.calculators.lammps_mliap_mace import LAMMPS_MLIAP_MACE
 from mace.cli.convert_e3nn_cueq import run as run_e3nn_to_cueq
-from mace.cli.convert_e3nn_cueq import mace2macecso
+from mace.cli.convert_e3nn_cueq import mace2macecso 
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -119,13 +119,19 @@ def main():
     )
     if args.cso_r is not None:
         ## 不能转化jit的，checkpoint可以转化
+        # if hasattr(model,'r_mid'):
+        #     model = mace2macecso(copy.deepcopy(model))
+        #     print(f"to msmacecso")
+        # else:
         model = mace2macecso(copy.deepcopy(model))
         print(f"to macecso")
+    # print(model)
 
     if has_dftd_submodule(model, "dispersion_correction"):
         print(
             f"model.dispersion_correction.coefficient={model.dispersion_correction.coefficient},with a1 = {model.dispersion_correction.a1} "
         )
+
         if args.coefficient is not None:
             model.dispersion_correction.coefficient = (
                 torch.ones_like(model.dispersion_correction.coefficient)

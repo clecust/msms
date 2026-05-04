@@ -763,7 +763,7 @@ class RealAgnosticResidualInteractionBlockMS(torch.nn.Module):
             src=mji, index=receiver, dim=0, dim_size=num_nodes
         )  # [n_nodes, irreps]
         message = self.linear(message)
-        ### long
+        # ### long
         long_tp_weights = self.long_conv_tp_weights(long_edge_feats)
         long_mji = self.long_conv_tp(
             long_node_feats[long_edge_index[0]], long_edge_attrs, long_tp_weights
