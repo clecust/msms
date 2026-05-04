@@ -87,7 +87,7 @@ def old2new_ref(
 
 if __name__ == "__main__":
     paths = [
-        r"/home/giga/BIG/data/md22/zip/*.xyz"
+        r"/home/giga/BIG/data/AmmoniumNitrate/lmp-md/lammps_3w10/traj_10ns_lmp_gfn1_stress.xyz"
     ]
     path_lists = []
     for path in paths:
@@ -102,10 +102,10 @@ if __name__ == "__main__":
     for pls in path_lists:
         print(pls)
         atoms_list = read(pls, format="extxyz", index=":")
-        atoms_list = old2new_ref(atoms_list,
-                                 energy_key="Energy",
-                                 kcal_to_ev=True)
+        atoms_list = old2new_ref(
+            atoms_list, energy_key="Energy", prefix="REF_", kcal_to_ev=False
+        )
 
-        save_pls = pls.replace('.xyz',"w101.xyz")
+        save_pls = pls.replace('.xyz',"_stress.xyz")
         print(f"save to {save_pls}")
         write(save_pls, atoms_list, append=False)

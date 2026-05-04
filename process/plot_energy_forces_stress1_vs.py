@@ -28,9 +28,9 @@ def get_forces(path, prefix="", index=":"):
         forces = [atom._calc.results[label] for atom in atoms]
 
     try:
-        energy = [atom.info[elabel] / len(atom.positions) for atom in atoms]
+        energy = [atom.info[elabel] for atom in atoms]
     except:
-        energy = [atom._calc.results[elabel] / len(atom.positions) for atom in atoms]
+        energy = [atom._calc.results[elabel] for atom in atoms]
 
     try:
         if stress_label in atoms[0].info:
@@ -58,19 +58,18 @@ def get_forces(path, prefix="", index=":"):
     ], axis=1)  # shape: (Nframes, 6)
     # stress = np.array(stress).reshape(len(atoms), -1)  # shape: (Nframes, 6)
     pos = np.vstack([atom.positions for atom in atoms]).flatten()
-    print('the mean of energy to 0')
-    energy -= energy.mean()
+    energy -= energy[-1]
     return energy, forces, stress6, pos
 
 
 if __name__ == "__main__":
     index=":"
-    # xyz_ref = "/home/giga/BIG/data/md22/md22_Ac-Ala3-NHMe_test_3w101.xyz"
+    # xyz_ref = "/home/giga/BIG/data/ML_TrainTest_ECEMC/TrainingData/al/npj_data/Train16_PBED3w101nos.xyz"
     # model_paths = [
-    #     (
-    #         "/home/giga/code/Draft/al_inter_forces/all/orca_PBE_md22_Ac-Ala3-NHMe_test_3/label/labeled.xyz",
-    #         "REF_",
-    #     ),
+    #     # (
+    #     #     "/home/giga/BIG/data/ML_TrainTest_ECEMC/TrainingData/al/npj_data/pbe_tzv2p_nomol_ot_d3bj_virial_cut800_Train16_PBED3w101.xyz",
+    #     #     "REF_",
+    #     # ),
     #     # (
     #     #     "/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/pbe_tzv2p_nomol_ot_d3bj_virial_cut800_VScan_EMC_{config}_14/label/labeled.xyz",
     #     #     "REF_",
@@ -106,49 +105,49 @@ if __name__ == "__main__":
     # ]
 
     # # #### ec
-    # config = "config05w101"
-    # info = ''
+    config = "config05w101"
+    info = ""
 
-    # xyz_ref = f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5.xyz"
-    # model_paths = [
-    #     # (
-    #     #     f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5.xyz",
-    #     #     "MACE_",
-    #     # ),
-    #     (
-    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5cso.xyz",
-    #         "MACE_",
-    #     ),
-    #     # (
-    #     #     f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5.xyz",
-    #     #     "MACE_",
-    #     # ),
-    #     # # 可添加更多模型路径
-    # ]
+    xyz_ref = f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5.xyz"
+    model_paths = [
+        # (
+        #     f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5.xyz",
+        #     "MACE_",
+        # ),
+        (
+            f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5cso.xyz",
+            "MACE_",
+        ),
+        # (
+        #     f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_EC_{config}_out5.xyz",
+        #     "MACE_",
+        # ),
+        # # 可添加更多模型路径
+    ]
     # config = "config05w101"
 
     # # # # ############ ec/emc data
     # xyz_ref = f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}.xyz"
     # model_paths = [
     #     (
-    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}_out4.xyz",
+    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}_out1.xyz",
     #         "MACE_",
     #     ),
-    #     # (
-    #     #     f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}_out2.xyz",
-    #     #     "MACE_",
-    #     # ),
-    #     # (
-    #     #     f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}_out3.xyz",
-    #     #     "MACE_",
-    #     # ),
-    #     # # 可添加更多模型路径
+    #     (
+    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}_out2.xyz",
+    #         "MACE_",
+    #     ),
+    #     (
+    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_66EC_33EMC_{config}_out3.xyz",
+    #         "MACE_",
+    #     ),
+    #     # 可添加更多模型路径
     # ]
 
-    # xyz_ref = f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_33EC_66EMC_{config}_out4.xyz"
+    # xyz_ref = f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_33EC_66EMC_{config}.xyz"
     # model_paths = [
     #     (
-    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_33EC_66EMC_{config}_out4_v2.xyz",
+    #         f"/home/giga/BIG/data/ML_TrainTest_ECEMC/GAPtests/DFT_PBED2/VScan_33EC_66EMC_{config}_out1.xyz",
     #         "MACE_",
     #     ),
     #     # (
@@ -206,26 +205,6 @@ if __name__ == "__main__":
     #     ),
     #     # 可添加更多模型路径
     # ]
-    ####
-
-    # data="/home/giga/BIG/data/lipfecpc/work_lipfecpc_pbe_4090_c8352Y_v7/data/AL_17_sel_100_al"
-    # data="/home/giga/BIG/data/lipfecpc/work_lipfecpc_pbe_4090_c8352Y_v7/data/AL_17_sel_130_al"
-    # data="/home/giga/BIG/data/lipfecpc/work_lipfecpc_pbe_4090_c8352Y_v7/data/AL_17_sel_216_al"
-    # data="/home/giga/BIG/data/lipfecpc/work_lipfecpc_pbe_4090_c8352Y_v7/data/AL_17_sel_168_al"
-    # data="/home/giga/BIG/data/ML_TrainTest_ECEMC/al-new/work_ecemc_pbe_4090_c8352Y_v1/data/test/AL_17_120_al"
-    # data="/home/giga/BIG/data/ML_TrainTest_ECEMC/al-new/work_ecemc_pbe_4090_c8352Y_v1/data/test/AL_17_140_al"
-    # data="/home/giga/BIG/data/ML_TrainTest_ECEMC/al-new/work_ecemc_pbe_4090_c8352Y_v1/data/test/AL_17_150_al"
-    # data="/home/giga/BIG/data/ML_TrainTest_ECEMC/al-new/work_ecemc_pbe_4090_c8352Y_v1/data/test/AL_17_160_al"
-    # data="/home/giga/BIG/data/ML_TrainTest_ECEMC/al-new/work_ecemc_pbe_4090_c8352Y_v1/data/test/AL_17_180_al"
-    data = "/home/giga/BIG/data/ML_TrainTest_ECEMC/al-new/work_ecemc_pbe_4090_c8352Y_v1/data/AL_17_sel"
-
-    xyz_ref = f"{data}.xyz"
-    model_paths = [
-        (
-            f"{data}_label.xyz",
-            "MACE_",
-        )
-    ]
     energy_true, force_true, stress_true, pos_true = get_forces(
         xyz_ref, prefix="REF_", index=index
     )  # MACE_    REF_
@@ -235,22 +214,22 @@ if __name__ == "__main__":
 
     with plt.style.context(["science", "grid"]):
         # 创建一张画布，共 3 行 3 列子图（前 3 个用于 fig_main，后 6 个用于 stress）
-        fig_all, ax_all = plt.subplots(3, 3, figsize=(18, 15))
+        fig_all, ax_all = plt.subplots(2, 2, figsize=(18, 15))
         ax_all = ax_all.flatten()
 
         # 分配子图
         ax_energy = ax_all[0]
         ax_force = ax_all[1]
         ax_energy_vs_frame = ax_all[2]
-        ax_stress = ax_all[3:]  # 6 个 stress 分量
+        ax_stress = ax_all[3]  # 1 个 stress 分量
 
         # 画 DFT 曲线（实线）
         ax_energy.plot(energy_true, energy_true, "k-", label="DFT")
         ax_force.plot(force_true, force_true, "k-", label="DFT")
         ax_energy_vs_frame.plot(x, energy_true, "k-", label="DFT")
 
-        for j in range(6):
-            ax_stress[j].plot(x, stress_true[:, j], "k-", label="DFT")
+        # for j in range(6):
+        ax_stress.plot(stress_true, stress_true, "k-", label="DFT")
 
         # 遍历模型预测
         if len(model_paths) > 0:
@@ -262,38 +241,37 @@ if __name__ == "__main__":
                     )
 
                     # 输出评估指标
-                    scale = 1e3
-                    rmse_e = np.sqrt(np.mean((energy_true - energy_pred) ** 2)) * scale
-                    r2_e = np.corrcoef(energy_true, energy_pred)[0, 1] ** 2 
-                    mae_e = np.mean(np.abs(energy_true - energy_pred)) * scale
+                    rmse_e = np.sqrt(np.mean((energy_true - energy_pred) ** 2))
+                    r2_e = np.corrcoef(energy_true, energy_pred)[0, 1] ** 2
+                    mae_e = np.mean(np.abs(energy_true - energy_pred))
 
-                    rmse_f = np.sqrt(np.mean((force_true - force_pred) ** 2)) * scale
-                    r2_f = np.corrcoef(force_true, force_pred)[0, 1] ** 2 
-                    mae_f = np.mean(np.abs(force_true - force_pred)) * scale
+                    rmse_f = np.sqrt(np.mean((force_true - force_pred) ** 2))
+                    r2_f = np.corrcoef(force_true, force_pred)[0, 1] ** 2
+                    mae_f = np.mean(np.abs(force_true - force_pred))
 
-                    rmse_s = np.sqrt(np.mean((stress_true - stress_pred) ** 2)) * scale
+                    rmse_s = np.sqrt(np.mean((stress_true - stress_pred) ** 2))
                     r2_s = (
                         np.corrcoef(stress_true.flatten(), stress_pred.flatten())[0, 1]
                         ** 2
-                    ) 
-                    mae_s = np.mean(np.abs(stress_true - stress_pred)) * scale
+                    )
+                    mae_s = np.mean(np.abs(stress_true - stress_pred))
 
                     print(
-                        f"{label} -> Energy: RMSE= {rmse_e:.4f} , r2={r2_e:.4f}, MAE={mae_e:.4f}"
+                        f"{label} -> Energy: RMSE={rmse_e:.4f}, r2={r2_e:.4f}, MAE={mae_e:.4f}"
                     )
                     print(
-                        f"{label} -> Force : RMSE= {rmse_f:.4f} , r2={r2_f:.4f}, MAE={mae_f:.4f}"
+                        f"{label} -> Force : RMSE={rmse_f:.4f}, r2={r2_f:.4f}, MAE={mae_f:.4f}"
                     )
                     print(
-                        f"{label} -> Stress: RMSE= {rmse_s:.4f} , r2={r2_s:.4f}, MAE={mae_s:.4f}"
+                        f"{label} -> Stress: RMSE={rmse_s:.4f}, r2={r2_s:.4f}, MAE={mae_s:.4f}"
                     )
 
                     ax_energy.plot(energy_true, energy_pred, "+", label=label)
                     ax_force.plot(force_true, force_pred, "+", label=label)
                     ax_energy_vs_frame.plot(x, energy_pred, "+", label=label)
 
-                    for j in range(6):
-                        ax_stress[j].plot(x, stress_pred[:, j], "+", label=label)
+                    # for j in range(6):
+                    ax_stress.plot(stress_true, stress_pred, "+", label=label)
 
                 except Exception as e:
                     print(f"Error processing {label}: {e}")
@@ -315,14 +293,14 @@ if __name__ == "__main__":
         ax_energy_vs_frame.legend()
 
         stress_labels = ["xx", "yy", "zz", "yz", "xz", "xy"]
-        for j in range(6):
-            ax_stress[j].set_title(f"Stress Component: {stress_labels[j]}")
-            ax_stress[j].set_xlabel("Frame Index")
-            ax_stress[j].set_ylabel("Stress (GPa)")
-            ax_stress[j].legend()
+        # for j in range(6):
+        ax_stress.set_title(f"Stress Component: {stress_labels}")
+        ax_stress.set_xlabel("Frame Index")
+        ax_stress.set_ylabel("Stress (GPa)")
+        ax_stress.legend()
 
         fig_all.tight_layout()
-        fig_all.savefig("combined_force_energy_stress.png")
+        fig_all.savefig("combined_force_energy_stress1.png")
         # plt.show()
 
     print("All plots generated successfully.")
